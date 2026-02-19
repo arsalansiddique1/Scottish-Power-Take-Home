@@ -1,4 +1,5 @@
 import json
+import logging
 import re
 from pathlib import Path
 from typing import Any, Protocol
@@ -7,6 +8,8 @@ import yaml
 
 from review_agent.analyzers.static_analyzer import build_analysis_text
 from review_agent.models import ChangedFile, Finding
+
+logger = logging.getLogger(__name__)
 
 
 class ChatClientProtocol(Protocol):
@@ -53,15 +56,23 @@ class LLMReviewer:
         prompt = self._build_prompt(changed_file)
         attempts = 2
         for _ in range(attempts):
-            raw = self._client.chat(
-                model=self._model,
-                prompt=prompt,
-                temperature=self._temperature,
-                timeout_seconds=self._timeout_seconds,
-            )
             try:
+                raw = self._client.chat(
+                    model=self._model,
+                    prompt=prompt,
+                    temperature=self._temperature,
+                    timeout_seconds=self._timeout_seconds,
+                )
                 return self._parse_response(raw, changed_file.file_path)
             except ValueError:
+                continue
+            except Exception as exc:
+                logger.warning(
+                    "llm_review_transport_error file=%s model=%s error=%s",
+                    changed_file.file_path,
+                    self._model,
+                    exc,
+                )
                 continue
         return []
 

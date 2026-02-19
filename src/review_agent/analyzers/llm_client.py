@@ -6,7 +6,7 @@ import ollama
 
 class OllamaLLMClient:
     def __init__(self, base_url: str) -> None:
-        self._client = ollama.Client(host=base_url)
+        self._base_url = base_url
 
     def chat(
         self,
@@ -16,7 +16,9 @@ class OllamaLLMClient:
         temperature: float,
         timeout_seconds: float,
     ) -> str:
-        response: Mapping[str, Any] = self._client.chat(
+        # Build a client with per-call timeout so stalled model calls fail cleanly.
+        client = ollama.Client(host=self._base_url, timeout=timeout_seconds)
+        response: Mapping[str, Any] = client.chat(
             model=model,
             messages=[{"role": "user", "content": prompt}],
             options={"temperature": temperature},
