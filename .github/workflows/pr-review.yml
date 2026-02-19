@@ -4,9 +4,15 @@ on:
   pull_request:
     types: [opened, synchronize, reopened, ready_for_review]
 
+permissions:
+  contents: read
+  pull-requests: write
+  issues: write
+
 jobs:
   automated-review:
     runs-on: ubuntu-latest
+    if: github.event.pull_request.head.repo.full_name == github.repository
     steps:
       - uses: actions/checkout@v4
 
@@ -23,11 +29,26 @@ jobs:
       - name: Install dependencies
         run: poetry install --no-interaction
 
+      - name: Validate required secrets
+        env:
+          REVIEWER_PAT: ${{ secrets.REVIEWER_PAT }}
+          LLM_BASE_URL: ${{ secrets.LLM_BASE_URL }}
+        run: |
+          if [ -z "$REVIEWER_PAT" ]; then
+            echo "Missing required secret: REVIEWER_PAT"
+            exit 1
+          fi
+          if [ -z "$LLM_BASE_URL" ]; then
+            echo "Missing required secret: LLM_BASE_URL"
+            exit 1
+          fi
+
       - name: Run automated PR review
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.REVIEWER_PAT }}
           LLM_BASE_URL: ${{ secrets.LLM_BASE_URL }}
           LLM_MODEL: qwen2.5-coder:14b
+          LLM_PROFILE: fast
         run: |
           poetry run review-agent run-pr-review \
             --repo "${{ github.repository }}" \
