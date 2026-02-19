@@ -50,18 +50,23 @@ class GithubAdapter:
             pr = repo.get_pull(context.pr_number)
             normalized: list[ChangedFile] = []
             for file in pr.get_files():
+                raw_patch = str(getattr(file, "patch", "") or "")
+                try:
+                    reviewable_lines = extract_reviewable_added_lines(raw_patch)
+                except Exception:
+                    # Never fail the full webhook run because one file patch is malformed.
+                    reviewable_lines = []
+
                 normalized.append(
                     ChangedFile(
                         file_path=str(getattr(file, "filename", "")),
                         status=str(getattr(file, "status", "")),
-                        patch=str(getattr(file, "patch", "") or ""),
+                        patch=raw_patch,
                         sha=getattr(file, "sha", None),
                         additions=int(getattr(file, "additions", 0) or 0),
                         deletions=int(getattr(file, "deletions", 0) or 0),
                         changes=int(getattr(file, "changes", 0) or 0),
-                        reviewable_lines=extract_reviewable_added_lines(
-                            str(getattr(file, "patch", "") or "")
-                        ),
+                        reviewable_lines=reviewable_lines,
                     )
                 )
             return normalized
