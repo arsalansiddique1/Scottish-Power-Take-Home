@@ -122,6 +122,7 @@ class ReviewOrchestrator:
             model_profiles_path=self._model_profiles_path,
             profile=llm_profile,
             temperature=0.0,
+            timeout_seconds=self._settings.llm_timeout_seconds,
         )
 
         logger.info("stage=llm_review profile=%s model=%s", llm_profile, self._settings.llm_model)

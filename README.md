@@ -42,6 +42,7 @@ Set required environment variables:
 $env:GITHUB_TOKEN="your_token"         # PowerShell
 $env:LLM_BASE_URL="http://localhost:11434"
 $env:LLM_MODEL="qwen2.5-coder:14b"
+$env:LLM_TIMEOUT_SECONDS="180"
 ```
 
 Run review against a live PR:

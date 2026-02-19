@@ -7,6 +7,7 @@ class Settings(BaseSettings):
     llm_base_url: str = "http://localhost:11434"
     llm_model: str = "qwen2.5-coder:7b"
     llm_profile: str = "fast"
+    llm_timeout_seconds: float = 180.0
 
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8")
 

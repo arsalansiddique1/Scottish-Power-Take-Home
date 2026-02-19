@@ -30,7 +30,7 @@ class LLMReviewer:
         model_profiles_path: str | Path,
         profile: str = "fast",
         temperature: float = 0.0,
-        timeout_seconds: float = 30.0,
+        timeout_seconds: float = 180.0,
     ) -> None:
         self._client = client
         self._temperature = temperature
@@ -46,6 +46,8 @@ class LLMReviewer:
         llm_findings: list[Finding] = []
 
         for changed_file in sorted(changed_files, key=lambda c: c.file_path):
+            if not self._is_llm_reviewable_file(changed_file.file_path):
+                continue
             per_file = self._review_with_retry(changed_file)
             llm_findings.extend(per_file)
 
@@ -116,6 +118,8 @@ class LLMReviewer:
 
     def _build_prompt(self, changed_file: ChangedFile) -> str:
         code_context = build_analysis_text(changed_file)
+        if len(code_context) > 6000:
+            code_context = code_context[:6000]
         return (
             "You are a strict code reviewer. Return JSON only."
             " Output either a JSON array or an object with key 'findings'."
@@ -190,4 +194,28 @@ class LLMReviewer:
                 f.rule_id,
                 f.source,
             ),
+        )
+
+    def _is_llm_reviewable_file(self, file_path: str) -> bool:
+        lowered = file_path.lower()
+        return lowered.endswith(
+            (
+                ".py",
+                ".js",
+                ".jsx",
+                ".ts",
+                ".tsx",
+                ".java",
+                ".go",
+                ".rs",
+                ".rb",
+                ".php",
+                ".swift",
+                ".kt",
+                ".c",
+                ".h",
+                ".cpp",
+                ".hpp",
+                ".cs",
+            )
         )
