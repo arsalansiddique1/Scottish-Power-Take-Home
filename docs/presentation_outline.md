@@ -50,7 +50,7 @@
 
 ## Slide 9: Testing Strategy
 - Unit tests: parser/rules/LLM fallback/delegation.
-- Integration tests: publish path + live orchestration with mocks.
+- Integration tests: publish path + live orchestration with Ollama.
 - E2E tests: fixture pipeline deterministic behavior.
 
 ## Slide 10: Tradeoffs, Limitations, Next Steps

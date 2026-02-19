@@ -4,7 +4,7 @@ from uuid import uuid4
 
 from review_agent.agents.delegation_manager import DelegationManager
 from review_agent.agents.graph import DelegationGraphRunner
-from review_agent.analyzers.llm_client import LLMClientProtocol, OllamaLLMClient
+from review_agent.analyzers.llm_client import OllamaLLMClient
 from review_agent.analyzers.llm_reviewer import LLMReviewer
 from review_agent.artifact_writer import ArtifactWriter
 from review_agent.comment_builder import build_line_comments, build_summary_comment
@@ -12,35 +12,6 @@ from review_agent.github_adapter import GithubAdapter
 from review_agent.models import ChangedFile, CommitInfo, PRContext, parse_pr_webhook_payload
 from review_agent.rules_engine import RulesEngine
 from review_agent.settings import Settings
-
-
-class MockLLMClient:
-    def chat(
-        self,
-        *,
-        model: str,
-        prompt: str,
-        temperature: float,
-        timeout_seconds: float,
-    ) -> str:
-        _ = (model, prompt, temperature, timeout_seconds)
-        return json.dumps(
-            {
-                "findings": [
-                    {
-                        "rule_id": "LLM_SEMANTIC_RISK",
-                        "category": "quality",
-                        "severity": "medium",
-                        "line": 2,
-                        "title": "Potential logic risk",
-                        "description": "Branch behavior may hide invalid inputs.",
-                        "suggestion": "Add explicit input validation and tests.",
-                        "evidence": "if item is None: continue",
-                        "confidence": 0.74,
-                    }
-                ]
-            }
-        )
 
 
 class ReviewOrchestrator:
@@ -65,7 +36,6 @@ class ReviewOrchestrator:
         patch_path: str | Path,
         output_dir: str | Path = "artifacts",
         run_id: str | None = None,
-        use_live_llm: bool = False,
         enable_delegation: bool = False,
     ) -> dict[str, object]:
         payload = json.loads(Path(payload_path).read_text(encoding="utf-8"))
@@ -85,7 +55,6 @@ class ReviewOrchestrator:
             changed_files=changed_files,
             output_dir=output_dir,
             run_id=run_id,
-            use_live_llm=use_live_llm,
             enable_delegation=enable_delegation,
             publish_to_github=False,
             auto_commit_refactors=False,
@@ -100,7 +69,6 @@ class ReviewOrchestrator:
         action: str,
         output_dir: str | Path = "artifacts",
         run_id: str | None = None,
-        use_live_llm: bool = True,
         enable_delegation: bool = True,
         auto_commit_refactors: bool = False,
     ) -> dict[str, object]:
@@ -118,7 +86,6 @@ class ReviewOrchestrator:
             changed_files=changed_files,
             output_dir=output_dir,
             run_id=run_id,
-            use_live_llm=use_live_llm,
             enable_delegation=enable_delegation,
             publish_to_github=True,
             auto_commit_refactors=auto_commit_refactors,
@@ -132,21 +99,14 @@ class ReviewOrchestrator:
         changed_files: list[ChangedFile],
         output_dir: str | Path,
         run_id: str | None,
-        use_live_llm: bool,
         enable_delegation: bool,
         publish_to_github: bool,
         auto_commit_refactors: bool,
         commit_history: list[CommitInfo] | None = None,
     ) -> dict[str, object]:
         static_findings = self._rules_engine.analyze_files(changed_files)
-
-        llm_client: LLMClientProtocol
-        if use_live_llm:
-            llm_client = OllamaLLMClient(base_url=self._settings.llm_base_url)
-            llm_profile = "quality"
-        else:
-            llm_client = MockLLMClient()
-            llm_profile = "fast"
+        llm_client = OllamaLLMClient(base_url=self._settings.llm_base_url)
+        llm_profile = self._settings.llm_profile
 
         llm_reviewer = LLMReviewer(
             client=llm_client,
@@ -191,7 +151,7 @@ class ReviewOrchestrator:
             findings,
             run_id=resolved_run_id,
             head_sha=context.head_sha,
-            model_name=self._settings.llm_model if use_live_llm else "mock-llm",
+            model_name=self._settings.llm_model,
             config_version="v1",
             prompt_version="p1",
             delegation_status=delegation_status,
@@ -233,7 +193,7 @@ class ReviewOrchestrator:
             run_metadata={
                 "run_id": resolved_run_id,
                 "head_sha": context.head_sha,
-                "model_name": self._settings.llm_model if use_live_llm else "mock-llm",
+                "model_name": self._settings.llm_model,
                 "config_version": "v1",
                 "prompt_version": "p1",
                 "delegation_status": delegation_status,

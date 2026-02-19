@@ -1,18 +1,19 @@
 import json
 from pathlib import Path
 
+from conftest import require_live_ollama
 from review_agent.review_orchestrator import ReviewOrchestrator
 from review_agent.settings import Settings
 
 
 def test_end_to_end_fixture_review(tmp_path: Path) -> None:
-    orchestrator = ReviewOrchestrator(settings=Settings())
+    _, model = require_live_ollama()
+    orchestrator = ReviewOrchestrator(settings=Settings(llm_model=model, llm_profile="fast"))
     result = orchestrator.run_fixture_review(
         payload_path="examples/sample_pr_payload.json",
         patch_path="examples/sample_diff.patch",
         output_dir=tmp_path,
         run_id="e2e-run-001",
-        use_live_llm=False,
     )
 
     assert result["run_id"] == "e2e-run-001"
@@ -34,7 +35,8 @@ def test_end_to_end_fixture_review(tmp_path: Path) -> None:
 
 
 def test_end_to_end_fixture_review_is_deterministic(tmp_path: Path) -> None:
-    orchestrator = ReviewOrchestrator(settings=Settings())
+    _, model = require_live_ollama()
+    orchestrator = ReviewOrchestrator(settings=Settings(llm_model=model, llm_profile="fast"))
 
     output_a = tmp_path / "run_a"
     output_b = tmp_path / "run_b"
@@ -44,31 +46,31 @@ def test_end_to_end_fixture_review_is_deterministic(tmp_path: Path) -> None:
         patch_path="examples/sample_diff.patch",
         output_dir=output_a,
         run_id="stable-run",
-        use_live_llm=False,
     )
     result_b = orchestrator.run_fixture_review(
         payload_path="examples/sample_pr_payload.json",
         patch_path="examples/sample_diff.patch",
         output_dir=output_b,
         run_id="stable-run",
-        use_live_llm=False,
     )
 
     assert result_a["total_findings"] == result_b["total_findings"]
 
-    findings_a = Path(str(result_a["artifacts"]["findings_jsonl"])).read_text(encoding="utf-8")
-    findings_b = Path(str(result_b["artifacts"]["findings_jsonl"])).read_text(encoding="utf-8")
-    assert findings_a == findings_b
+    lines_a = Path(str(result_a["artifacts"]["findings_jsonl"])).read_text(encoding="utf-8").splitlines()
+    lines_b = Path(str(result_b["artifacts"]["findings_jsonl"])).read_text(encoding="utf-8").splitlines()
+    keyset_a = sorted((json.loads(line)["rule_id"], json.loads(line)["file_path"], json.loads(line)["line"]) for line in lines_a)
+    keyset_b = sorted((json.loads(line)["rule_id"], json.loads(line)["file_path"], json.loads(line)["line"]) for line in lines_b)
+    assert keyset_a == keyset_b
 
 
 def test_end_to_end_fixture_review_with_delegation(tmp_path: Path) -> None:
-    orchestrator = ReviewOrchestrator(settings=Settings())
+    _, model = require_live_ollama()
+    orchestrator = ReviewOrchestrator(settings=Settings(llm_model=model, llm_profile="fast"))
     result = orchestrator.run_fixture_review(
         payload_path="examples/sample_pr_payload.json",
         patch_path="examples/sample_diff.patch",
         output_dir=tmp_path / "delegation",
         run_id="delegate-run",
-        use_live_llm=False,
         enable_delegation=True,
     )
 

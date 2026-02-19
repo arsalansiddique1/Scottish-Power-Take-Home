@@ -1,18 +1,7 @@
 from collections.abc import Mapping
-from typing import Any, Protocol
+from typing import Any
 
 import ollama
-
-
-class LLMClientProtocol(Protocol):
-    def chat(
-        self,
-        *,
-        model: str,
-        prompt: str,
-        temperature: float,
-        timeout_seconds: float,
-    ) -> str: ...
 
 
 class OllamaLLMClient:

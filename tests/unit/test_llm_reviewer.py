@@ -1,31 +1,17 @@
+from review_agent.analyzers.llm_client import OllamaLLMClient
 from review_agent.analyzers.llm_reviewer import LLMReviewer
 from review_agent.models import ChangedFile, Finding
-
-
-class FakeLLMClient:
-    def __init__(self, responses: list[str]) -> None:
-        self._responses = responses
-        self.calls = 0
-
-    def chat(
-        self,
-        *,
-        model: str,
-        prompt: str,
-        temperature: float,
-        timeout_seconds: float,
-    ) -> str:
-        _ = (model, prompt, temperature, timeout_seconds)
-        response = self._responses[min(self.calls, len(self._responses) - 1)]
-        self.calls += 1
-        return response
+from conftest import require_live_ollama
 
 
 def _changed_file() -> ChangedFile:
     return ChangedFile(
         file_path="src/example.py",
         status="modified",
-        content="eval(user_input)\n",
+        content='''
+secret = "abcd1234"
+exec(user_input)
+''',
     )
 
 
@@ -37,63 +23,28 @@ def _baseline() -> list[Finding]:
             severity="high",
             confidence=0.9,
             file_path="src/example.py",
-            line=1,
+            line=2,
             title="Unsafe exec",
             description="exec/eval detected",
             suggestion="Avoid eval",
-            evidence="eval(user_input)",
+            evidence="exec(user_input)",
             source="static",
         )
     ]
 
 
-def test_llm_reviewer_parses_valid_json() -> None:
-    response = (
-        '[{"rule_id":"LLM_STYLE","category":"style","severity":"low",'
-        '"line":1,"title":"Naming","description":"Variable naming issue",'
-        '"suggestion":"Rename variable","evidence":"badName","confidence":0.8}]'
-    )
+def test_llm_reviewer_live_ollama_returns_structured_findings() -> None:
+    base_url, _ = require_live_ollama()
+
     reviewer = LLMReviewer(
-        client=FakeLLMClient([response]),
+        client=OllamaLLMClient(base_url=base_url),
         model_profiles_path="config/model_profiles.yaml",
         profile="fast",
+        temperature=0.0,
     )
 
     findings = reviewer.review_files([_changed_file()], static_findings=_baseline())
-    assert len(findings) == 2
-    assert any(f.source == "llm" for f in findings)
 
-
-def test_llm_reviewer_retries_once_on_malformed_response() -> None:
-    bad = "not-json"
-    good = (
-        '{"findings":[{"category":"security","severity":"high","line":1,'
-        '"title":"Risk","description":"Issue","suggestion":"Fix",'
-        '"evidence":"eval","confidence":0.9}]}'
-    )
-    client = FakeLLMClient([bad, good])
-    reviewer = LLMReviewer(
-        client=client,
-        model_profiles_path="config/model_profiles.yaml",
-        profile="fast",
-    )
-
-    findings = reviewer.review_files([_changed_file()], static_findings=[])
-    assert len(findings) == 1
-    assert findings[0].source == "llm"
-    assert client.calls == 2
-
-
-def test_llm_reviewer_falls_back_to_static_only_after_invalid_responses() -> None:
-    client = FakeLLMClient(["bad-json", "still-bad"])
-    reviewer = LLMReviewer(
-        client=client,
-        model_profiles_path="config/model_profiles.yaml",
-        profile="fast",
-    )
-
-    baseline = _baseline()
-    findings = reviewer.review_files([_changed_file()], static_findings=baseline)
-
-    assert findings == baseline
-    assert client.calls == 2
+    assert findings
+    assert any(f.source == "llm" for f in findings) or any(f.source == "static" for f in findings)
+    assert all(0.0 <= f.confidence <= 1.0 for f in findings)

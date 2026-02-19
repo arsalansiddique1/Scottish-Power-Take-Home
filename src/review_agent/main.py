@@ -23,7 +23,6 @@ def run_fixture_review(
     patch_path: str = "examples/sample_diff.patch",
     output_dir: str = "artifacts",
     run_id: str | None = None,
-    live_llm: bool = False,
     enable_delegation: bool = False,
 ) -> None:
     """Run full baseline review from local fixture files."""
@@ -33,7 +32,6 @@ def run_fixture_review(
         patch_path=patch_path,
         output_dir=output_dir,
         run_id=run_id,
-        use_live_llm=live_llm,
         enable_delegation=enable_delegation,
     )
     typer.echo(json.dumps(result, indent=2))
@@ -46,7 +44,6 @@ def run_pr_review(
     action: str = typer.Option("synchronize", "--action"),
     output_dir: str = "artifacts",
     run_id: str | None = None,
-    live_llm: bool = False,
     enable_delegation: bool = True,
     auto_commit_refactors: bool = False,
 ) -> None:
@@ -62,7 +59,6 @@ def run_pr_review(
         action=action,
         output_dir=output_dir,
         run_id=run_id,
-        use_live_llm=live_llm,
         enable_delegation=enable_delegation,
         auto_commit_refactors=auto_commit_refactors,
     )

@@ -1,3 +1,4 @@
+from conftest import require_live_ollama
 from review_agent.models import ChangedFile, CommitInfo, PRContext
 from review_agent.review_orchestrator import ReviewOrchestrator
 from review_agent.settings import Settings
@@ -59,9 +60,10 @@ camelCaseVar = 1
 
 
 def test_run_pr_review_live_flow_with_publish_and_refactor_commit(tmp_path) -> None:
+    _, model = require_live_ollama()
     adapter = FakeGithubAdapter()
     orchestrator = ReviewOrchestrator(
-        settings=Settings(github_token="dummy-token"),
+        settings=Settings(github_token="dummy-token", llm_model=model, llm_profile="fast"),
         github_adapter=adapter,
     )
 
@@ -70,7 +72,6 @@ def test_run_pr_review_live_flow_with_publish_and_refactor_commit(tmp_path) -> N
         pr_number=12,
         action="synchronize",
         output_dir=tmp_path,
-        use_live_llm=False,
         enable_delegation=True,
         auto_commit_refactors=True,
         run_id="live-test-run",

@@ -2,7 +2,7 @@
 
 Automated code review pipeline for GitHub pull requests using:
 - static rule-based analysis
-- LLM semantic analysis (Ollama or mock)
+- LLM semantic analysis (Ollama)
 - actionable review-comment generation
 - reproducible artifacts (JSONL/JSON/CSV)
 - optional multi-agent delegation/refactor/verification
@@ -19,7 +19,7 @@ poetry install
 poetry run review-agent healthcheck
 ```
 
-### 3. Run baseline review with fixture input (default mock LLM)
+### 3. Run baseline review with fixture input (live Ollama)
 ```bash
 poetry run review-agent run-fixture-review --run-id sample-run --output-dir artifacts/sample
 ```
@@ -46,12 +46,12 @@ $env:LLM_MODEL="qwen2.5-coder:14b"
 
 Run review against a live PR:
 ```bash
-poetry run review-agent run-pr-review --repo owner/repo --pr-number 123 --action synchronize --live-llm --enable-delegation
+poetry run review-agent run-pr-review --repo owner/repo --pr-number 123 --action synchronize --enable-delegation
 ```
 
 To allow safe automated refactor commit back to the PR branch:
 ```bash
-poetry run review-agent run-pr-review --repo owner/repo --pr-number 123 --action synchronize --live-llm --enable-delegation --auto-commit-refactors
+poetry run review-agent run-pr-review --repo owner/repo --pr-number 123 --action synchronize --enable-delegation --auto-commit-refactors
 ```
 
 ## Webhook Mode
@@ -73,9 +73,9 @@ Endpoint:
 ```bash
 ollama pull qwen2.5-coder:7b
 ```
-3. Run with live LLM:
+3. Run review:
 ```bash
-poetry run review-agent run-fixture-review --live-llm --run-id live-run
+poetry run review-agent run-fixture-review --run-id live-run
 ```
 
 ## Project Layout
@@ -96,7 +96,6 @@ Each review run generates:
 - `metrics.csv`
 
 ## Notes
-- Default fixture mode uses a deterministic mock LLM to keep demo runs reproducible.
 - Live Ollama mode is supported for semantic analysis with local open-source models.
 - Delegation mode adds threshold-based handoff to refactoring and verification agents.
 - GitHub Actions PR trigger workflow is available in `.github/workflows/pr-review.yml`.

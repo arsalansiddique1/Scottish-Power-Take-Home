@@ -47,7 +47,6 @@ async def github_webhook(
         pr_number=pr_number,
         action=action,
         output_dir="artifacts/webhook",
-        use_live_llm=False,
         enable_delegation=True,
         auto_commit_refactors=False,
     )

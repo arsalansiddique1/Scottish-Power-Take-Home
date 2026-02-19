@@ -1,19 +1,29 @@
 import json
 import re
 from pathlib import Path
-from typing import Any
+from typing import Any, Protocol
 
 import yaml
 
-from review_agent.analyzers.llm_client import LLMClientProtocol
 from review_agent.analyzers.static_analyzer import build_analysis_text
 from review_agent.models import ChangedFile, Finding
+
+
+class ChatClientProtocol(Protocol):
+    def chat(
+        self,
+        *,
+        model: str,
+        prompt: str,
+        temperature: float,
+        timeout_seconds: float,
+    ) -> str: ...
 
 
 class LLMReviewer:
     def __init__(
         self,
-        client: LLMClientProtocol,
+        client: ChatClientProtocol,
         model_profiles_path: str | Path,
         profile: str = "fast",
         temperature: float = 0.0,
