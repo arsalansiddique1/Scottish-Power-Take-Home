@@ -1,0 +1,5 @@
+thresholds:
+  total_findings_threshold: 2
+  high_severity_in_file_threshold: 2
+  quality_or_security_findings_threshold: 2
+  complex_conditional_trigger_rule: QUALITY_COMPLEX_CONDITIONAL

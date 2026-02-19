@@ -1,0 +1,54 @@
+[tool.poetry]
+name = "automated-pr-reviewer"
+version = "0.1.0"
+description = "Automated GitHub PR code review system"
+authors = ["Arsal <arsal@example.com>"]
+readme = "README.md"
+packages = [{ include = "review_agent", from = "src" }]
+
+[tool.poetry.dependencies]
+python = ">=3.11,<3.13"
+fastapi = "^0.116.1"
+uvicorn = "^0.35.0"
+pydantic = "^2.11.7"
+pydantic-settings = "^2.10.1"
+pyyaml = "^6.0.2"
+pygithub = "^2.8.1"
+unidiff = "^0.7.5"
+structlog = "^25.4.0"
+langchain = "^0.3.27"
+langgraph = "^0.6.6"
+ollama = "^0.5.3"
+typer = "^0.16.1"
+
+[tool.poetry.group.dev.dependencies]
+pytest = "^8.4.1"
+pytest-mock = "^3.14.1"
+ruff = "^0.12.10"
+black = "^25.1.0"
+mypy = "^1.17.1"
+
+[tool.poetry.scripts]
+review-agent = "review_agent.main:app"
+
+[build-system]
+requires = ["poetry-core>=2.0.0,<3.0.0"]
+build-backend = "poetry.core.masonry.api"
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.black]
+line-length = 100
+target-version = ["py311"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]
+
+[tool.mypy]
+python_version = "3.11"
+warn_return_any = true
+warn_unused_configs = true
+disallow_untyped_defs = true

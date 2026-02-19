@@ -1,0 +1,12 @@
+{
+  "action": "synchronize",
+  "repository": {
+    "full_name": "acme/demo-repo"
+  },
+  "pull_request": {
+    "number": 42,
+    "head": {
+      "sha": "abc123def456"
+    }
+  }
+}

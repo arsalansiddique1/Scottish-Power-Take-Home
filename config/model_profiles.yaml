@@ -1,0 +1,7 @@
+models:
+  quality:
+    model: qwen2.5-coder:14b
+    temperature: 0.0
+  fast:
+    model: qwen2.5-coder:7b
+    temperature: 0.0

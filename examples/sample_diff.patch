@@ -1,0 +1,18 @@
+--- a/src/calculator.py
++++ b/src/calculator.py
+@@ -1,5 +1,7 @@
+ def calculate_total(items):
+-    total=0
++    total = 0
+     for item in items:
+-        total+=item
++        if item is None:
++            continue
++        total += item
+     return total
+@@ -20,1 +23,4 @@ def apply_discount(price, discount):
+-    return price - discount
++    if discount < 0:
++        return price
++
++    return price - discount

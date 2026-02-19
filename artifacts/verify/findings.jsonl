@@ -1,0 +1,1 @@
+{"rule_id": "LLM_SEMANTIC_RISK", "category": "quality", "severity": "medium", "confidence": 0.74, "file_path": "src/calculator.py", "line": 2, "end_line": null, "title": "Potential logic risk", "description": "Branch behavior may hide invalid inputs.", "suggestion": "Add explicit input validation and tests.", "evidence": "if item is None: continue", "source": "llm"}

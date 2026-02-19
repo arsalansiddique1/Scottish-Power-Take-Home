@@ -1,0 +1,80 @@
+rules:
+  - id: STYLE_LINE_LENGTH
+    enabled: true
+    category: style
+    severity: low
+    detector: line_length
+    max_length: 100
+    description: Line exceeds configured maximum length.
+    recommendation: Break long lines into smaller statements for readability.
+    docs_ref: PEP8-E501
+    languages: [python]
+    confidence: 0.95
+
+  - id: STYLE_NAMING_CONVENTION
+    enabled: true
+    category: style
+    severity: low
+    detector: heuristic
+    description: Variable name appears non-snake_case.
+    recommendation: Use snake_case names for Python variables.
+    docs_ref: PEP8-Naming
+    languages: [python]
+    confidence: 0.75
+
+  - id: QUALITY_DUPLICATED_BRANCH_LOGIC
+    enabled: true
+    category: quality
+    severity: medium
+    detector: heuristic
+    description: If/else branches return identical logic.
+    recommendation: Collapse duplicated branches into a single return path.
+    docs_ref: Refactoring-Duplicate-Code
+    languages: [python]
+    confidence: 0.8
+
+  - id: QUALITY_COMPLEX_CONDITIONAL
+    enabled: true
+    category: quality
+    severity: medium
+    detector: ast
+    description: Conditional expression is complex.
+    recommendation: Simplify conditionals or extract helper predicates.
+    docs_ref: CleanCode-Complexity
+    languages: [python]
+    confidence: 0.82
+
+  - id: SECURITY_HARDCODED_SECRET
+    enabled: true
+    category: security
+    severity: high
+    detector: regex
+    pattern: '(?i)(api[_-]?key|secret|token)\s*=\s*["\''][^"\'']+["\'']'
+    description: Potential hardcoded secret detected.
+    recommendation: Move secrets to environment variables or a secret manager.
+    docs_ref: OWASP-A02
+    languages: [python]
+    confidence: 0.92
+
+  - id: SECURITY_UNSAFE_EXEC
+    enabled: true
+    category: security
+    severity: high
+    detector: regex
+    pattern: '(?<!\w)(eval|exec)\s*\('
+    description: Potentially unsafe dynamic code execution found.
+    recommendation: Avoid eval/exec; use safe parsing or explicit dispatch.
+    docs_ref: CWE-94
+    languages: [python]
+    confidence: 0.9
+
+  - id: BP_MISSING_ERROR_HANDLING
+    enabled: true
+    category: best_practice
+    severity: medium
+    detector: ast
+    description: Risky external/resource call without try/except handling.
+    recommendation: Wrap risky operations with explicit exception handling.
+    docs_ref: Robustness-ErrorHandling
+    languages: [python]
+    confidence: 0.78
