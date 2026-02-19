@@ -1,4 +1,5 @@
 import json
+import logging
 from pathlib import Path
 from uuid import uuid4
 
@@ -12,6 +13,8 @@ from review_agent.github_adapter import GithubAdapter
 from review_agent.models import ChangedFile, CommitInfo, PRContext, parse_pr_webhook_payload
 from review_agent.rules_engine import RulesEngine
 from review_agent.settings import Settings
+
+logger = logging.getLogger(__name__)
 
 
 class ReviewOrchestrator:
@@ -72,13 +75,17 @@ class ReviewOrchestrator:
         enable_delegation: bool = True,
         auto_commit_refactors: bool = False,
     ) -> dict[str, object]:
+        logger.info("stage=get_pr_context repo=%s pr=%s action=%s", repo_full_name, pr_number, action)
         context = self._github_adapter.get_pr_context(
             repo_full_name=repo_full_name,
             pr_number=pr_number,
             action=action,
         )
+        logger.info("stage=get_changed_files repo=%s pr=%s", repo_full_name, pr_number)
         changed_files = self._github_adapter.get_changed_files(context)
+        logger.info("stage=hydrate_file_contents files=%s", len(changed_files))
         changed_files = self._github_adapter.hydrate_file_contents(context, changed_files)
+        logger.info("stage=get_commit_history")
         commit_history = self._github_adapter.get_commit_history(context)
 
         return self._run_pipeline(
@@ -104,7 +111,9 @@ class ReviewOrchestrator:
         auto_commit_refactors: bool,
         commit_history: list[CommitInfo] | None = None,
     ) -> dict[str, object]:
+        logger.info("stage=static_analysis files=%s", len(changed_files))
         static_findings = self._rules_engine.analyze_files(changed_files)
+        logger.info("stage=static_analysis_done findings=%s", len(static_findings))
         llm_client = OllamaLLMClient(base_url=self._settings.llm_base_url)
         llm_profile = self._settings.llm_profile
 
@@ -115,7 +124,9 @@ class ReviewOrchestrator:
             temperature=0.0,
         )
 
+        logger.info("stage=llm_review profile=%s model=%s", llm_profile, self._settings.llm_model)
         findings = llm_reviewer.review_files(changed_files, static_findings=static_findings)
+        logger.info("stage=llm_review_done findings=%s", len(findings))
 
         delegation_status = "not-run"
         delegation_reasons: list[str] = []
@@ -125,6 +136,7 @@ class ReviewOrchestrator:
 
         delegated_files = changed_files
         if enable_delegation:
+            logger.info("stage=delegation_start")
             graph_runner = DelegationGraphRunner(
                 delegation_manager=DelegationManager.from_yaml(self._thresholds_config_path)
             )
@@ -144,6 +156,11 @@ class ReviewOrchestrator:
                 delegation_status = "delegated_verified"
             else:
                 delegation_status = "delegated_failed_verification"
+            logger.info(
+                "stage=delegation_done status=%s actions=%s",
+                delegation_status,
+                len(refactor_actions),
+            )
 
         resolved_run_id = run_id or uuid4().hex[:12]
         line_comments = build_line_comments(findings, run_id=resolved_run_id)
@@ -164,14 +181,17 @@ class ReviewOrchestrator:
             )
 
         if publish_to_github:
+            logger.info("stage=publish_line_comments count=%s", len(line_comments))
             self._github_adapter.publish_line_comments(
                 context=context,
                 comments=line_comments,
                 commit_id=context.head_sha,
             )
+            logger.info("stage=publish_summary_comment")
             self._github_adapter.publish_summary_comment(context=context, body=summary)
 
             if auto_commit_refactors and delegation_status == "delegated_verified":
+                logger.info("stage=commit_refactors_start")
                 refactor_commit_sha = self._github_adapter.commit_refactor_changes(
                     context=context,
                     changed_files=delegated_files,
@@ -186,7 +206,9 @@ class ReviewOrchestrator:
                             f"- actions: `{len(refactor_actions)}`"
                         ),
                     )
+                logger.info("stage=commit_refactors_done sha=%s", refactor_commit_sha or "")
 
+        logger.info("stage=write_artifacts")
         artifacts = ArtifactWriter(output_dir=output_dir).write(
             findings=findings,
             summary_comment=summary,
@@ -200,6 +222,7 @@ class ReviewOrchestrator:
                 "commit_count": str(len(commit_history or [])),
             },
         )
+        logger.info("stage=complete run_id=%s findings=%s", resolved_run_id, len(findings))
 
         return {
             "run_id": resolved_run_id,
