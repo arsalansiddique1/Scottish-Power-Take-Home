@@ -164,7 +164,11 @@ class ReviewOrchestrator:
             )
 
         resolved_run_id = run_id or uuid4().hex[:12]
-        line_comments = build_line_comments(findings, run_id=resolved_run_id)
+        line_comments = build_line_comments(
+            findings,
+            run_id=resolved_run_id,
+            changed_files=changed_files,
+        )
         summary = build_summary_comment(
             findings,
             run_id=resolved_run_id,
