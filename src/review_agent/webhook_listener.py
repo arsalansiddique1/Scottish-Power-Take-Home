@@ -2,7 +2,7 @@ import hashlib
 import hmac
 from typing import Any
 
-from fastapi import FastAPI, Header, HTTPException, Request
+from fastapi import BackgroundTasks, FastAPI, Header, HTTPException, Request
 
 from review_agent.review_orchestrator import ReviewOrchestrator
 from review_agent.settings import get_settings
@@ -13,6 +13,7 @@ app = FastAPI(title="Automated PR Reviewer Webhook")
 @app.post("/webhook/github")
 async def github_webhook(
     request: Request,
+    background_tasks: BackgroundTasks,
     x_hub_signature_256: str = Header(default=""),
     x_github_event: str = Header(default=""),
 ) -> dict[str, Any]:
@@ -41,17 +42,20 @@ async def github_webhook(
     if not settings.github_token:
         raise HTTPException(status_code=400, detail="Missing GITHUB_TOKEN")
 
-    orchestrator = ReviewOrchestrator(settings=settings)
-    result = orchestrator.run_pr_review(
+    background_tasks.add_task(
+        _process_pr_review_task,
         repo_full_name=repo_full_name,
         pr_number=pr_number,
         action=action,
-        output_dir="artifacts/webhook",
-        enable_delegation=True,
-        auto_commit_refactors=False,
     )
 
-    return {"status": "processed", "result": result}
+    # Respond immediately to avoid GitHub webhook delivery timeouts.
+    return {
+        "status": "accepted",
+        "repo": repo_full_name,
+        "pr_number": pr_number,
+        "action": action,
+    }
 
 
 def _verify_signature(secret: str, payload: bytes, signature_header: str) -> None:
@@ -64,3 +68,16 @@ def _verify_signature(secret: str, payload: bytes, signature_header: str) -> Non
     digest = hmac.new(secret.encode("utf-8"), payload, hashlib.sha256).hexdigest()
     if not hmac.compare_digest(provided, digest):
         raise HTTPException(status_code=401, detail="Webhook signature mismatch")
+
+
+def _process_pr_review_task(repo_full_name: str, pr_number: int, action: str) -> None:
+    settings = get_settings()
+    orchestrator = ReviewOrchestrator(settings=settings)
+    orchestrator.run_pr_review(
+        repo_full_name=repo_full_name,
+        pr_number=pr_number,
+        action=action,
+        output_dir="artifacts/webhook",
+        enable_delegation=True,
+        auto_commit_refactors=False,
+    )
