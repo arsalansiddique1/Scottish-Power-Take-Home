@@ -66,6 +66,26 @@ Endpoint:
 - `POST /webhook/github`
 - Verifies `X-Hub-Signature-256` using `WEBHOOK_SECRET`
 - Handles PR actions: `opened`, `synchronize`, `reopened`, `ready_for_review`
+- Returns immediately with `run_id` and processes the review in a background task
+
+Run tracking endpoints:
+- `GET /webhook/status/{run_id}`: returns `accepted|running|success|failed`
+- `GET /webhook/artifacts/{run_id}`: downloads a zip containing `summary.json`, `findings.jsonl`, `metrics.csv` when status is `success`
+
+## GitHub Actions Bridge (Webhook-Only Execution)
+
+Workflow file: `.github/workflows/pr-webhook-bridge.yml`
+
+Required repository secrets:
+- `WEBHOOK_URL` (for example `https://<your-ngrok-domain>`)
+- `WEBHOOK_SECRET` (must match local `.env` `WEBHOOK_SECRET`)
+
+How it works:
+1. On PR events, Actions posts a signed request to `POST /webhook/github`.
+2. Workflow receives `run_id` from the webhook response.
+3. Workflow polls `GET /webhook/status/{run_id}` until completion.
+4. On success, workflow downloads `GET /webhook/artifacts/{run_id}`.
+5. Workflow uploads those files to the Actions run via `actions/upload-artifact`.
 
 ## Optional: Run with live Ollama
 
@@ -99,5 +119,5 @@ Each review run generates:
 ## Notes
 - Live Ollama mode is supported for semantic analysis with local open-source models.
 - Delegation mode adds threshold-based handoff to refactoring and verification agents.
-- GitHub Actions PR trigger workflow is available in `.github/workflows/pr-review.yml`.
+- GitHub Actions bridge workflow is available in `.github/workflows/pr-webhook-bridge.yml`.
 - Live PR flow retrieves commit history and includes commit metadata in summary/artifacts.

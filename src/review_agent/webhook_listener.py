@@ -5,14 +5,20 @@ import traceback
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
+from uuid import uuid4
+from zipfile import ZIP_DEFLATED, ZipFile
+import io
 
 from fastapi import BackgroundTasks, FastAPI, Header, HTTPException, Request
+from fastapi.responses import StreamingResponse
 
 from review_agent.review_orchestrator import ReviewOrchestrator
 from review_agent.settings import get_settings
 
 app = FastAPI(title="Automated PR Reviewer Webhook")
 logger = logging.getLogger(__name__)
+
+_RUN_STATE: dict[str, dict[str, Any]] = {}
 
 
 @app.post("/webhook/github")
@@ -49,12 +55,25 @@ async def github_webhook(
         raise HTTPException(status_code=400, detail="Missing GITHUB_TOKEN")
 
     delivery_id = x_github_delivery or "unknown-delivery"
+    run_id = f"run-{uuid4().hex[:12]}"
     _append_webhook_log(
-        f"accepted delivery_id={delivery_id} repo={repo_full_name} pr={pr_number} action={action}"
+        f"accepted delivery_id={delivery_id} run_id={run_id} repo={repo_full_name} pr={pr_number} action={action}"
     )
+    _RUN_STATE[run_id] = {
+        "status": "accepted",
+        "delivery_id": delivery_id,
+        "repo": repo_full_name,
+        "pr_number": pr_number,
+        "action": action,
+        "error": "",
+        "artifacts": {},
+        "created_at": datetime.now(timezone.utc).isoformat(),
+        "updated_at": datetime.now(timezone.utc).isoformat(),
+    }
 
     background_tasks.add_task(
         _process_pr_review_task,
+        run_id=run_id,
         repo_full_name=repo_full_name,
         pr_number=pr_number,
         action=action,
@@ -68,7 +87,56 @@ async def github_webhook(
         "pr_number": pr_number,
         "action": action,
         "delivery_id": delivery_id,
+        "run_id": run_id,
+        "status_url": f"/webhook/status/{run_id}",
+        "artifacts_url": f"/webhook/artifacts/{run_id}",
     }
+
+
+@app.get("/webhook/status/{run_id}")
+async def webhook_status(run_id: str) -> dict[str, Any]:
+    state = _RUN_STATE.get(run_id)
+    if state is None:
+        raise HTTPException(status_code=404, detail="Unknown run_id")
+    return {
+        "run_id": run_id,
+        "status": state.get("status", "unknown"),
+        "delivery_id": state.get("delivery_id", ""),
+        "repo": state.get("repo", ""),
+        "pr_number": state.get("pr_number", 0),
+        "action": state.get("action", ""),
+        "error": state.get("error", ""),
+        "artifacts": state.get("artifacts", {}),
+        "created_at": state.get("created_at", ""),
+        "updated_at": state.get("updated_at", ""),
+    }
+
+
+@app.get("/webhook/artifacts/{run_id}")
+async def webhook_artifacts(run_id: str) -> StreamingResponse:
+    state = _RUN_STATE.get(run_id)
+    if state is None:
+        raise HTTPException(status_code=404, detail="Unknown run_id")
+    if state.get("status") != "success":
+        raise HTTPException(status_code=409, detail="Artifacts not ready")
+
+    artifacts = state.get("artifacts", {})
+    paths = [
+        Path(str(artifacts.get("summary_json", ""))),
+        Path(str(artifacts.get("findings_jsonl", ""))),
+        Path(str(artifacts.get("metrics_csv", ""))),
+    ]
+    if any(not p.exists() for p in paths):
+        raise HTTPException(status_code=404, detail="Artifact files missing")
+
+    buf = io.BytesIO()
+    with ZipFile(buf, mode="w", compression=ZIP_DEFLATED) as zip_file:
+        for path in paths:
+            zip_file.write(path, arcname=path.name)
+    buf.seek(0)
+    filename = f"pr-review-artifacts-{run_id}.zip"
+    headers = {"Content-Disposition": f'attachment; filename="{filename}"'}
+    return StreamingResponse(buf, media_type="application/zip", headers=headers)
 
 
 def _verify_signature(secret: str, payload: bytes, signature_header: str) -> None:
@@ -84,14 +152,16 @@ def _verify_signature(secret: str, payload: bytes, signature_header: str) -> Non
 
 
 def _process_pr_review_task(
+    run_id: str,
     repo_full_name: str,
     pr_number: int,
     action: str,
     delivery_id: str,
 ) -> None:
     try:
+        _update_run_state(run_id, status="running")
         _append_webhook_log(
-            f"start delivery_id={delivery_id} repo={repo_full_name} pr={pr_number} action={action}"
+            f"start delivery_id={delivery_id} run_id={run_id} repo={repo_full_name} pr={pr_number} action={action}"
         )
         settings = get_settings()
         orchestrator = ReviewOrchestrator(settings=settings)
@@ -99,9 +169,16 @@ def _process_pr_review_task(
             repo_full_name=repo_full_name,
             pr_number=pr_number,
             action=action,
-            output_dir="artifacts/webhook",
+            output_dir=f"artifacts/webhook/{run_id}",
+            run_id=run_id,
             enable_delegation=True,
             auto_commit_refactors=False,
+        )
+        _update_run_state(
+            run_id,
+            status="success",
+            error="",
+            artifacts=result.get("artifacts", {}),
         )
         _append_webhook_log(
             f"result delivery_id={delivery_id} run_id={result.get('run_id')} "
@@ -114,6 +191,7 @@ def _process_pr_review_task(
         )
     except Exception as exc:
         logger.exception("webhook background task failed delivery_id=%s", delivery_id)
+        _update_run_state(run_id, status="failed", error=str(exc))
         _append_webhook_log(f"error delivery_id={delivery_id} error={exc}")
         _write_failure_trace(delivery_id)
 
@@ -131,3 +209,10 @@ def _write_failure_trace(delivery_id: str) -> None:
     out_dir.mkdir(parents=True, exist_ok=True)
     trace_path = out_dir / f"error_{delivery_id}.log"
     trace_path.write_text(traceback.format_exc(), encoding="utf-8")
+
+
+def _update_run_state(run_id: str, **updates: Any) -> None:
+    if run_id not in _RUN_STATE:
+        _RUN_STATE[run_id] = {"created_at": datetime.now(timezone.utc).isoformat()}
+    _RUN_STATE[run_id].update(updates)
+    _RUN_STATE[run_id]["updated_at"] = datetime.now(timezone.utc).isoformat()
