@@ -173,3 +173,43 @@ def test_build_line_comments_dedupes_equivalent_findings() -> None:
     comments = build_line_comments(findings, run_id="run-1", changed_files=changed_files)
 
     assert len(comments) == 1
+
+
+def test_build_line_comment_contains_problematic_code_and_suggested_fix() -> None:
+    findings = [
+        Finding(
+            rule_id="STYLE_NAMING_CONVENTION",
+            category="style",
+            severity="low",
+            confidence=0.95,
+            file_path="src/a.py",
+            line=3,
+            title="Variable name appears non-snake_case.",
+            description="Variable name appears non-snake_case.",
+            suggestion="Use snake_case names for Python variables.",
+            evidence="camelCaseVar = 1",
+            docs_ref="PEP8-Naming",
+            reasoning="Heuristic detector matched rule-specific pattern: camelCaseVar = 1",
+            source="static",
+        )
+    ]
+    changed_files = [
+        ChangedFile(
+            file_path="src/a.py",
+            status="modified",
+            content="\n\ncamelCaseVar = 1\n",
+            reviewable_lines=[3],
+        )
+    ]
+
+    comments = build_line_comments(findings, run_id="run-2", changed_files=changed_files)
+
+    assert len(comments) == 1
+    body = comments[0].body
+    assert "Problematic code:" in body
+    assert "camelCaseVar = 1" in body
+    assert "Suggested fix:" in body
+    assert "```suggestion" in body
+    assert "camel_case_var = 1" in body
+    assert "Docs: `PEP8-Naming`" in body
+    assert "Reasoning:" in body

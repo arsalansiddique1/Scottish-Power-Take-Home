@@ -68,10 +68,24 @@ def apply_rule(rule: RuleDefinition, changed_file: ChangedFile) -> list[Finding]
                 description=rule.description,
                 suggestion=rule.recommendation,
                 evidence=evidence[:180],
+                docs_ref=rule.docs_ref,
+                reasoning=_reasoning_text(rule.detector, evidence),
                 source='static',
             )
         )
     return findings
+
+
+def _reasoning_text(detector: str, evidence: str) -> str:
+    if detector == "regex":
+        return f"Regex detector matched line snippet: {evidence[:80]}"
+    if detector == "line_length":
+        return f"Line-length detector exceeded configured maximum. Snippet: {evidence[:80]}"
+    if detector == "ast":
+        return f"AST detector matched semantic pattern: {evidence[:80]}"
+    if detector == "heuristic":
+        return f"Heuristic detector matched rule-specific pattern: {evidence[:80]}"
+    return f"Rule detector triggered on snippet: {evidence[:80]}"
 
 
 def _line_length_matches(text: str, limit: int) -> list[LineMatch]:

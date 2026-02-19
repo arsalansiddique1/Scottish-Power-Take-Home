@@ -1,5 +1,6 @@
 from collections import Counter
 import re
+from pathlib import Path
 
 from review_agent.models import ChangedFile, Finding, PRLineComment
 
@@ -13,6 +14,7 @@ def build_line_comments(
     confidence_threshold: float = 0.65,
 ) -> list[PRLineComment]:
     reviewable_map = _build_reviewable_line_map(changed_files or [])
+    file_line_map = _build_file_line_map(changed_files or [])
     ranked_findings = sorted(
         findings,
         key=lambda f: (_severity_rank(f.severity), -f.confidence, f.file_path, f.line, f.rule_id),
@@ -45,7 +47,11 @@ def build_line_comments(
             PRLineComment(
                 path=finding.file_path,
                 line=line,
-                body=_line_comment_body(finding, run_id),
+                body=_line_comment_body(
+                    finding=finding,
+                    run_id=run_id,
+                    line_text=_line_text_for_comment(finding, line, file_line_map),
+                ),
             )
         )
     return comments
@@ -105,7 +111,16 @@ def build_summary_comment(
     return "\n".join(lines)
 
 
-def _line_comment_body(finding: Finding, run_id: str) -> str:
+def _line_comment_body(finding: Finding, run_id: str, line_text: str) -> str:
+    docs_line = f"\nDocs: `{finding.docs_ref}`" if finding.docs_ref else ""
+    reasoning_line = f"\nReasoning: {finding.reasoning}" if finding.reasoning else ""
+    code_block = (
+        f"\n\nProblematic code:\n```{_language_from_path(finding.file_path)}\n{line_text}\n```"
+        if line_text.strip()
+        else ""
+    )
+    suggestion_block = _build_suggestion_block(finding, line_text)
+
     return (
         f"[{finding.severity.upper()}][{finding.category}] `{finding.rule_id}`\n\n"
         f"What: {finding.description}\n"
@@ -114,6 +129,10 @@ def _line_comment_body(finding: Finding, run_id: str) -> str:
         f"Evidence: `{finding.evidence}`\n"
         f"Confidence: `{finding.confidence:.2f}`\n"
         f"Run: `{run_id}`"
+        f"{docs_line}"
+        f"{reasoning_line}"
+        f"{code_block}"
+        f"{suggestion_block}"
     )
 
 
@@ -167,3 +186,69 @@ def _normalize_text(value: str) -> str:
     lowered = value.lower().strip()
     collapsed = re.sub(r"\s+", " ", lowered)
     return re.sub(r"[^a-z0-9 ]+", "", collapsed)
+
+
+def _build_file_line_map(changed_files: list[ChangedFile]) -> dict[str, dict[int, str]]:
+    mapping: dict[str, dict[int, str]] = {}
+    for changed_file in changed_files:
+        if not changed_file.content.strip():
+            continue
+        lines = changed_file.content.splitlines()
+        mapping[changed_file.file_path] = {idx: line for idx, line in enumerate(lines, start=1)}
+    return mapping
+
+
+def _line_text_for_comment(
+    finding: Finding,
+    anchored_line: int,
+    file_line_map: dict[str, dict[int, str]],
+) -> str:
+    per_file = file_line_map.get(finding.file_path, {})
+    return per_file.get(anchored_line, finding.evidence or "")
+
+
+def _language_from_path(file_path: str) -> str:
+    suffix = Path(file_path).suffix.lower()
+    mapping = {
+        ".py": "python",
+        ".js": "javascript",
+        ".ts": "typescript",
+        ".tsx": "tsx",
+        ".jsx": "jsx",
+        ".java": "java",
+        ".go": "go",
+        ".rs": "rust",
+    }
+    return mapping.get(suffix, "")
+
+
+def _build_suggestion_block(finding: Finding, line_text: str) -> str:
+    replacement = _suggested_replacement(finding, line_text)
+    if replacement is None:
+        return ""
+    return f"\n\nSuggested fix:\n```suggestion\n{replacement}\n```"
+
+
+def _suggested_replacement(finding: Finding, line_text: str) -> str | None:
+    stripped = line_text.strip()
+    if not stripped:
+        return None
+
+    if finding.rule_id == "STYLE_NAMING_CONVENTION":
+        match = re.search(r"^\s*([a-z]+[A-Z][A-Za-z0-9]*)\s*=", line_text)
+        if not match:
+            return None
+        original = match.group(1)
+        snake = re.sub(r"([a-z0-9])([A-Z])", r"\1_\2", original).lower()
+        return re.sub(rf"\b{original}\b", snake, line_text)
+
+    if finding.rule_id == "SECURITY_HARDCODED_SECRET":
+        assignment_match = re.search(r"^\s*([A-Za-z_][A-Za-z0-9_]*)\s*=", line_text)
+        if not assignment_match:
+            return None
+        name = assignment_match.group(1)
+        env_name = re.sub(r"[^A-Za-z0-9_]", "_", name).upper()
+        leading = re.match(r"^\s*", line_text).group(0)
+        return f'{leading}{name} = os.getenv("{env_name}")'
+
+    return None
