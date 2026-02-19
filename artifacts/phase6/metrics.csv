@@ -1,2 +1,0 @@
-run_id,head_sha,total_findings,critical,high,medium,low,static,llm
-phase6-verify,abc123def456,1,0,0,1,0,0,1
