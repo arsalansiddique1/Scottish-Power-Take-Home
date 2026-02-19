@@ -5,7 +5,8 @@ Automated code review pipeline for GitHub pull requests using:
 - LLM semantic analysis (Ollama)
 - actionable review-comment generation
 - reproducible artifacts (JSONL/JSON/CSV)
-- optional multi-agent delegation/refactor/verification
+- LangGraph-based multi-agent delegation/refactor/verification
+- optional LangSmith tracing for run observability
 
 ## Quick Start (Under 5 Minutes)
 
@@ -43,6 +44,9 @@ $env:GITHUB_TOKEN="your_token"         # PowerShell
 $env:LLM_BASE_URL="http://localhost:11434"
 $env:LLM_MODEL="qwen2.5-coder:14b"
 $env:LLM_TIMEOUT_SECONDS="180"
+$env:LANGSMITH_TRACING="true"
+$env:LANGSMITH_API_KEY="lsv2_..."
+$env:LANGSMITH_PROJECT="automated-pr-reviewer"
 ```
 
 Run review against a live PR:
@@ -71,21 +75,6 @@ Endpoint:
 Run tracking endpoints:
 - `GET /webhook/status/{run_id}`: returns `accepted|running|success|failed`
 - `GET /webhook/artifacts/{run_id}`: downloads a zip containing `summary.json`, `findings.jsonl`, `metrics.csv` when status is `success`
-
-## GitHub Actions Bridge (Webhook-Only Execution)
-
-Workflow file: `.github/workflows/pr-webhook-bridge.yml`
-
-Required repository secrets:
-- `WEBHOOK_URL` (for example `https://<your-ngrok-domain>`)
-- `WEBHOOK_SECRET` (must match local `.env` `WEBHOOK_SECRET`)
-
-How it works:
-1. On PR events, Actions posts a signed request to `POST /webhook/github`.
-2. Workflow receives `run_id` from the webhook response.
-3. Workflow polls `GET /webhook/status/{run_id}` until completion.
-4. On success, workflow downloads `GET /webhook/artifacts/{run_id}`.
-5. Workflow uploads those files to the Actions run via `actions/upload-artifact`.
 
 ## Optional: Run with live Ollama
 
@@ -118,6 +107,6 @@ Each review run generates:
 
 ## Notes
 - Live Ollama mode is supported for semantic analysis with local open-source models.
-- Delegation mode adds threshold-based handoff to refactoring and verification agents.
-- GitHub Actions bridge workflow is available in `.github/workflows/pr-webhook-bridge.yml`.
+- Delegation mode runs as a LangGraph workflow with decision/refactor/verification nodes.
+- LangSmith tracing can be enabled with `LANGSMITH_TRACING=true` and `LANGSMITH_API_KEY`.
 - Live PR flow retrieves commit history and includes commit metadata in summary/artifacts.

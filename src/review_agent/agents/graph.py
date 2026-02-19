@@ -23,7 +23,12 @@ class DelegationGraphRunner:
         self._verification_agent = VerificationAgent()
         self._graph = self._build_graph()
 
-    def run(self, changed_files: list[ChangedFile], findings: list[Finding]) -> dict[str, Any]:
+    def run(
+        self,
+        changed_files: list[ChangedFile],
+        findings: list[Finding],
+        graph_config: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
         initial_state: AgentGraphState = {
             "changed_files": changed_files,
             "findings": findings,
@@ -31,7 +36,7 @@ class DelegationGraphRunner:
             "refactor_actions": [],
             "verification_result": VerificationResult(passed=True, details=[]),
         }
-        return self._graph.invoke(initial_state)
+        return self._graph.invoke(initial_state, config=graph_config or {})
 
     def _build_graph(self):
         graph = StateGraph(AgentGraphState)

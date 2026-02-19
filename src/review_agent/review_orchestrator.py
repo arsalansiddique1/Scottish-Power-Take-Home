@@ -13,6 +13,7 @@ from review_agent.github_adapter import GithubAdapter
 from review_agent.models import ChangedFile, CommitInfo, PRContext, parse_pr_webhook_payload
 from review_agent.rules_engine import RulesEngine
 from review_agent.settings import Settings
+from review_agent.tracing import configure_langsmith, langgraph_run_config, traced_span
 
 logger = logging.getLogger(__name__)
 
@@ -27,6 +28,7 @@ class ReviewOrchestrator:
         github_adapter: GithubAdapter | None = None,
     ) -> None:
         self._settings = settings
+        configure_langsmith(settings)
         self._rules_engine = RulesEngine.from_yaml(rules_config_path)
         self._model_profiles_path = model_profiles_path
         self._thresholds_config_path = thresholds_config_path
@@ -111,8 +113,25 @@ class ReviewOrchestrator:
         auto_commit_refactors: bool,
         commit_history: list[CommitInfo] | None = None,
     ) -> dict[str, object]:
+        resolved_run_id = run_id or uuid4().hex[:12]
+        trace_metadata = {
+            "run_id": resolved_run_id,
+            "repo": context.repo_full_name,
+            "pr_number": context.pr_number,
+            "head_sha": context.head_sha,
+            "llm_model": self._settings.llm_model,
+            "llm_profile": self._settings.llm_profile,
+            "delegation_enabled": enable_delegation,
+        }
+
         logger.info("stage=static_analysis files=%s", len(changed_files))
-        static_findings = self._rules_engine.analyze_files(changed_files)
+        with traced_span(
+            enabled=self._settings.langsmith_tracing,
+            name="static_analysis",
+            inputs={"changed_files": len(changed_files)},
+            metadata=trace_metadata,
+        ):
+            static_findings = self._rules_engine.analyze_files(changed_files)
         logger.info("stage=static_analysis_done findings=%s", len(static_findings))
         llm_client = OllamaLLMClient(base_url=self._settings.llm_base_url)
         llm_profile = self._settings.llm_profile
@@ -126,7 +145,13 @@ class ReviewOrchestrator:
         )
 
         logger.info("stage=llm_review profile=%s model=%s", llm_profile, self._settings.llm_model)
-        findings = llm_reviewer.review_files(changed_files, static_findings=static_findings)
+        with traced_span(
+            enabled=self._settings.langsmith_tracing,
+            name="llm_review",
+            inputs={"changed_files": len(changed_files)},
+            metadata=trace_metadata,
+        ):
+            findings = llm_reviewer.review_files(changed_files, static_findings=static_findings)
         logger.info("stage=llm_review_done findings=%s", len(findings))
 
         delegation_status = "not-run"
@@ -141,7 +166,15 @@ class ReviewOrchestrator:
             graph_runner = DelegationGraphRunner(
                 delegation_manager=DelegationManager.from_yaml(self._thresholds_config_path)
             )
-            graph_result = graph_runner.run(changed_files=changed_files, findings=findings)
+            graph_result = graph_runner.run(
+                changed_files=changed_files,
+                findings=findings,
+                graph_config=langgraph_run_config(
+                    run_name="delegation_graph",
+                    tags=["delegation", "pr-review"],
+                    metadata=trace_metadata,
+                ),
+            )
             decision = graph_result["delegation_decision"]
             verification = graph_result["verification_result"]
             actions = graph_result["refactor_actions"]
@@ -163,7 +196,6 @@ class ReviewOrchestrator:
                 len(refactor_actions),
             )
 
-        resolved_run_id = run_id or uuid4().hex[:12]
         line_comments = build_line_comments(
             findings,
             run_id=resolved_run_id,
@@ -187,21 +219,39 @@ class ReviewOrchestrator:
 
         if publish_to_github:
             logger.info("stage=publish_line_comments count=%s", len(line_comments))
-            self._github_adapter.publish_line_comments(
-                context=context,
-                comments=line_comments,
-                commit_id=context.head_sha,
-            )
+            with traced_span(
+                enabled=self._settings.langsmith_tracing,
+                name="publish_line_comments",
+                inputs={"line_comments": len(line_comments)},
+                metadata=trace_metadata,
+            ):
+                self._github_adapter.publish_line_comments(
+                    context=context,
+                    comments=line_comments,
+                    commit_id=context.head_sha,
+                )
             logger.info("stage=publish_summary_comment")
-            self._github_adapter.publish_summary_comment(context=context, body=summary)
+            with traced_span(
+                enabled=self._settings.langsmith_tracing,
+                name="publish_summary_comment",
+                inputs={"summary_length": len(summary)},
+                metadata=trace_metadata,
+            ):
+                self._github_adapter.publish_summary_comment(context=context, body=summary)
 
             if auto_commit_refactors and delegation_status == "delegated_verified":
                 logger.info("stage=commit_refactors_start")
-                refactor_commit_sha = self._github_adapter.commit_refactor_changes(
-                    context=context,
-                    changed_files=delegated_files,
-                    commit_message="chore(refactor-agent): apply safe automated refactors",
-                )
+                with traced_span(
+                    enabled=self._settings.langsmith_tracing,
+                    name="commit_refactors",
+                    inputs={"files": len(delegated_files)},
+                    metadata=trace_metadata,
+                ):
+                    refactor_commit_sha = self._github_adapter.commit_refactor_changes(
+                        context=context,
+                        changed_files=delegated_files,
+                        commit_message="chore(refactor-agent): apply safe automated refactors",
+                    )
                 if refactor_commit_sha:
                     self._github_adapter.publish_summary_comment(
                         context=context,
@@ -214,19 +264,25 @@ class ReviewOrchestrator:
                 logger.info("stage=commit_refactors_done sha=%s", refactor_commit_sha or "")
 
         logger.info("stage=write_artifacts")
-        artifacts = ArtifactWriter(output_dir=output_dir).write(
-            findings=findings,
-            summary_comment=summary,
-            run_metadata={
-                "run_id": resolved_run_id,
-                "head_sha": context.head_sha,
-                "model_name": self._settings.llm_model,
-                "config_version": "v1",
-                "prompt_version": "p1",
-                "delegation_status": delegation_status,
-                "commit_count": str(len(commit_history or [])),
-            },
-        )
+        with traced_span(
+            enabled=self._settings.langsmith_tracing,
+            name="write_artifacts",
+            inputs={"output_dir": str(output_dir)},
+            metadata=trace_metadata,
+        ):
+            artifacts = ArtifactWriter(output_dir=output_dir).write(
+                findings=findings,
+                summary_comment=summary,
+                run_metadata={
+                    "run_id": resolved_run_id,
+                    "head_sha": context.head_sha,
+                    "model_name": self._settings.llm_model,
+                    "config_version": "v1",
+                    "prompt_version": "p1",
+                    "delegation_status": delegation_status,
+                    "commit_count": str(len(commit_history or [])),
+                },
+            )
         logger.info("stage=complete run_id=%s findings=%s", resolved_run_id, len(findings))
 
         return {
