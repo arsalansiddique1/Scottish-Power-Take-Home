@@ -1,7 +1,6 @@
-from collections.abc import Mapping
 from typing import Any
-
-import ollama
+from langchain_ollama import ChatOllama
+from langchain_core.messages import HumanMessage
 
 
 class OllamaLLMClient:
@@ -16,14 +15,25 @@ class OllamaLLMClient:
         temperature: float,
         timeout_seconds: float,
     ) -> str:
-        # Build a client with per-call timeout so stalled model calls fail cleanly.
-        client = ollama.Client(host=self._base_url, timeout=timeout_seconds)
-        response: Mapping[str, Any] = client.chat(
+        client = ChatOllama(
             model=model,
-            messages=[{"role": "user", "content": prompt}],
-            options={"temperature": temperature},
+            base_url=self._base_url,
+            temperature=temperature,
+            timeout=timeout_seconds,
             format="json",
         )
-        message = response.get("message", {})
-        content = message.get("content", "")
+        response = client.invoke([HumanMessage(content=prompt)])
+        content = response.content
+        if isinstance(content, str):
+            return content
+        if isinstance(content, list):
+            return "".join(_extract_content_piece(piece) for piece in content)
         return str(content)
+
+
+def _extract_content_piece(piece: Any) -> str:
+    if isinstance(piece, str):
+        return piece
+    if isinstance(piece, dict):
+        return str(piece.get("text", ""))
+    return str(piece)
