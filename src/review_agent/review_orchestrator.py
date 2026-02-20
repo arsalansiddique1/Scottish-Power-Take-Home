@@ -17,6 +17,8 @@ from review_agent.settings import Settings
 from review_agent.tracing import configure_langsmith, langgraph_run_config, traced_span
 
 logger = logging.getLogger(__name__)
+AUTO_REFACTOR_COMMIT_PREFIX = "chore(refactor-agent):"
+MAX_AUTO_REFACTOR_COMMITS_PER_PR = 1
 
 
 class ReviewOrchestrator:
@@ -252,33 +254,48 @@ class ReviewOrchestrator:
                 self._github_adapter.publish_summary_comment(context=context, body=summary)
 
             if auto_commit_refactors and delegation_status == "delegated_verified":
-                logger.info("stage=commit_refactors_start")
-                with traced_span(
-                    enabled=self._settings.langsmith_tracing,
-                    name="commit_refactors",
-                    inputs={"files": len(delegated_files)},
-                    metadata=trace_metadata,
-                ):
-                    refactor_commit_sha = self._github_adapter.commit_refactor_changes(
-                        context=context,
-                        changed_files=delegated_files,
-                        commit_message="chore(refactor-agent): apply safe automated refactors",
-                    )
-                if refactor_commit_sha:
-                    action_lines = "\n".join(
-                        f"- `{a.get('file_path', '')}` `{a.get('action_type', '')}`: {a.get('description', '')}"
-                        for a in refactor_actions[:10]
-                    )
+                should_skip_auto_commit, skip_reason = self._should_skip_auto_refactor_commit(
+                    commit_history=commit_history or [],
+                    refactor_actions=refactor_actions,
+                )
+                if should_skip_auto_commit:
+                    logger.info("stage=commit_refactors_skip reason=%s", skip_reason)
                     self._github_adapter.publish_summary_comment(
                         context=context,
                         body=(
-                            "Refactoring agent committed safe updates to the PR branch.\n"
-                            f"- commit: `{refactor_commit_sha}`\n"
-                            f"- actions: `{len(refactor_actions)}`\n"
-                            f"{action_lines}"
+                            "Refactoring agent produced updates but auto-commit was skipped.\n"
+                            f"- reason: `{skip_reason}`\n"
+                            "- action: no additional automated commit created"
                         ),
                     )
-                logger.info("stage=commit_refactors_done sha=%s", refactor_commit_sha or "")
+                else:
+                    logger.info("stage=commit_refactors_start")
+                    with traced_span(
+                        enabled=self._settings.langsmith_tracing,
+                        name="commit_refactors",
+                        inputs={"files": len(delegated_files)},
+                        metadata=trace_metadata,
+                    ):
+                        refactor_commit_sha = self._github_adapter.commit_refactor_changes(
+                            context=context,
+                            changed_files=delegated_files,
+                            commit_message=f"{AUTO_REFACTOR_COMMIT_PREFIX} apply safe automated refactors",
+                        )
+                    if refactor_commit_sha:
+                        action_lines = "\n".join(
+                            f"- `{a.get('file_path', '')}` `{a.get('action_type', '')}`: {a.get('description', '')}"
+                            for a in refactor_actions[:10]
+                        )
+                        self._github_adapter.publish_summary_comment(
+                            context=context,
+                            body=(
+                                "Refactoring agent committed safe updates to the PR branch.\n"
+                                f"- commit: `{refactor_commit_sha}`\n"
+                                f"- actions: `{len(refactor_actions)}`\n"
+                                f"{action_lines}"
+                            ),
+                        )
+                    logger.info("stage=commit_refactors_done sha=%s", refactor_commit_sha or "")
 
         logger.info("stage=write_artifacts")
         with traced_span(
@@ -320,3 +337,27 @@ class ReviewOrchestrator:
             "refactor_commit_sha": refactor_commit_sha,
             "commit_history_count": len(commit_history or []),
         }
+
+    def _should_skip_auto_refactor_commit(
+        self,
+        *,
+        commit_history: list[CommitInfo],
+        refactor_actions: list[dict[str, object]],
+    ) -> tuple[bool, str]:
+        if not refactor_actions:
+            return True, "no_refactor_actions"
+
+        if commit_history:
+            latest_message = (commit_history[0].message or "").strip().lower()
+            if latest_message.startswith(AUTO_REFACTOR_COMMIT_PREFIX):
+                return True, "latest_commit_is_refactor_agent"
+
+        auto_refactor_commits = sum(
+            1
+            for commit in commit_history
+            if (commit.message or "").strip().lower().startswith(AUTO_REFACTOR_COMMIT_PREFIX)
+        )
+        if auto_refactor_commits >= MAX_AUTO_REFACTOR_COMMITS_PER_PR:
+            return True, "auto_refactor_commit_limit_reached"
+
+        return False, ""

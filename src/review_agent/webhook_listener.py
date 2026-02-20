@@ -172,7 +172,7 @@ def _process_pr_review_task(
             output_dir=f"artifacts/webhook/{run_id}",
             run_id=run_id,
             enable_delegation=True,
-            auto_commit_refactors=False,
+            auto_commit_refactors=True,
         )
         _update_run_state(
             run_id,
