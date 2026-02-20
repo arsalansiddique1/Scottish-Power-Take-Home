@@ -50,18 +50,23 @@ class GithubAdapter:
             pr = repo.get_pull(context.pr_number)
             normalized: list[ChangedFile] = []
             for file in pr.get_files():
+                raw_patch = str(getattr(file, "patch", "") or "")
+                try:
+                    reviewable_lines = extract_reviewable_added_lines(raw_patch)
+                except Exception:
+                    # Never fail the full webhook run because one file patch is malformed.
+                    reviewable_lines = []
+
                 normalized.append(
                     ChangedFile(
                         file_path=str(getattr(file, "filename", "")),
                         status=str(getattr(file, "status", "")),
-                        patch=str(getattr(file, "patch", "") or ""),
+                        patch=raw_patch,
                         sha=getattr(file, "sha", None),
                         additions=int(getattr(file, "additions", 0) or 0),
                         deletions=int(getattr(file, "deletions", 0) or 0),
                         changes=int(getattr(file, "changes", 0) or 0),
-                        reviewable_lines=extract_reviewable_added_lines(
-                            str(getattr(file, "patch", "") or "")
-                        ),
+                        reviewable_lines=reviewable_lines,
                     )
                 )
             return normalized
@@ -123,13 +128,17 @@ class GithubAdapter:
             repo = self._require_client().get_repo(context.repo_full_name)
             pr = repo.get_pull(context.pr_number)
             for comment in comments:
-                pr.create_review_comment(
-                    body=comment.body,
-                    commit=commit_id,
-                    path=comment.path,
-                    line=comment.line,
-                    side=comment.side,
-                )
+                payload: dict[str, object] = {
+                    "body": comment.body,
+                    "commit": commit_id,
+                    "path": comment.path,
+                    "line": comment.line,
+                    "side": comment.side,
+                }
+                if comment.start_line is not None and comment.start_side is not None:
+                    payload["start_line"] = comment.start_line
+                    payload["start_side"] = comment.start_side
+                pr.create_review_comment(**payload)
 
         self._run_with_retries(operation)
 

@@ -2,10 +2,11 @@
 
 Automated code review pipeline for GitHub pull requests using:
 - static rule-based analysis
-- LLM semantic analysis (Ollama)
+- LLM semantic analysis (Ollama) with rule-aware prompting from coding standards
 - actionable review-comment generation
 - reproducible artifacts (JSONL/JSON/CSV)
-- optional multi-agent delegation/refactor/verification
+- LangGraph-based multi-agent delegation/refactor/verification
+- optional LangSmith tracing for run observability
 
 ## Quick Start (Under 5 Minutes)
 
@@ -42,6 +43,10 @@ Set required environment variables:
 $env:GITHUB_TOKEN="your_token"         # PowerShell
 $env:LLM_BASE_URL="http://localhost:11434"
 $env:LLM_MODEL="qwen2.5-coder:14b"
+$env:LLM_TIMEOUT_SECONDS="180"
+$env:LANGSMITH_TRACING="true"
+$env:LANGSMITH_API_KEY="lsv2_..."
+$env:LANGSMITH_PROJECT="automated-pr-reviewer"
 ```
 
 Run review against a live PR:
@@ -65,6 +70,11 @@ Endpoint:
 - `POST /webhook/github`
 - Verifies `X-Hub-Signature-256` using `WEBHOOK_SECRET`
 - Handles PR actions: `opened`, `synchronize`, `reopened`, `ready_for_review`
+- Returns immediately with `run_id` and processes the review in a background task
+
+Run tracking endpoints:
+- `GET /webhook/status/{run_id}`: returns `accepted|running|success|failed`
+- `GET /webhook/artifacts/{run_id}`: downloads a zip containing `summary.json`, `findings.jsonl`, `metrics.csv` when status is `success`
 
 ## Optional: Run with live Ollama
 
@@ -97,6 +107,10 @@ Each review run generates:
 
 ## Notes
 - Live Ollama mode is supported for semantic analysis with local open-source models.
-- Delegation mode adds threshold-based handoff to refactoring and verification agents.
-- GitHub Actions PR trigger workflow is available in `.github/workflows/pr-review.yml`.
+- Ollama inference is invoked via `langchain-ollama` (`ChatOllama`) for unified LangChain management.
+- Baseline LLM prompt includes rule catalog, diff-hunk context, file metadata, and requires structured rule-mapped findings.
+- Delegation mode runs as a LangGraph workflow with decision/refactor/verification nodes.
+- Delegation refactor node now performs LLM-assisted refactoring (with deterministic fallback transforms).
+- LangSmith traces should show both graph node transitions and model runs during delegated refactor flows.
+- LangSmith tracing can be enabled with `LANGSMITH_TRACING=true` and `LANGSMITH_API_KEY`.
 - Live PR flow retrieves commit history and includes commit metadata in summary/artifacts.

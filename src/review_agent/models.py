@@ -57,13 +57,20 @@ class Finding(BaseModel):
     description: str
     suggestion: str
     evidence: str
+    docs_ref: str | None = None
+    reasoning: str | None = None
+    problematic_code: str | None = None
+    replacement_code: str | None = None
+    suggested_diff: str | None = None
     source: Literal["static", "llm"] = "static"
 
 
 class PRLineComment(BaseModel):
     path: str
+    start_line: int | None = None
     line: int
     body: str
+    start_side: Literal["RIGHT"] | None = None
     side: Literal["RIGHT"] = "RIGHT"
 
 

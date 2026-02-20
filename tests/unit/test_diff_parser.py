@@ -12,3 +12,11 @@ def test_extract_reviewable_added_lines_multi_hunk() -> None:
 
 def test_extract_reviewable_added_lines_empty_patch() -> None:
     assert extract_reviewable_added_lines("") == []
+
+
+def test_extract_reviewable_added_lines_hunk_only_deleted_file_patch() -> None:
+    patch = """@@ -1,37 +0,0 @@
+-line1
+-line2
+"""
+    assert extract_reviewable_added_lines(patch) == []

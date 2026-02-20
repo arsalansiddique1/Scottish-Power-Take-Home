@@ -92,3 +92,19 @@ def test_findings_have_normalized_confidence_range() -> None:
     assert findings
     for finding in findings:
         assert 0.0 <= finding.confidence <= 1.0
+
+
+def test_static_findings_include_docs_ref_and_reasoning() -> None:
+    changed_files = [
+        ChangedFile(
+            file_path="src/security.py",
+            status="modified",
+            content='api_key = "abc123"\n',
+        )
+    ]
+
+    findings = _build_engine().analyze_files(changed_files)
+    target = next(f for f in findings if f.rule_id == "SECURITY_HARDCODED_SECRET")
+    assert target.docs_ref == "OWASP-A02"
+    assert target.reasoning is not None
+    assert "Regex detector matched" in target.reasoning
