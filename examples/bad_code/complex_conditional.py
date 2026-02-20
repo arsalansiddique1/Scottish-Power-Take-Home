@@ -1,17 +1,17 @@
-def should_process(a, b, c, d, e):
-    """Return True if every condition required for processing is met.
+def has_pair_true(flag_b, flag_c, flag_d, flag_e):
+    """Return True if any of the following flag pairs are simultaneously True:
 
-    The original implementation inlined a complex boolean expression making
-    the intent obscure. This refactor extracts the sub‑conditions into a
-    small helper to improve readability while preserving behaviour.
+    - flag_b and flag_c
+    - flag_d and flag_e
+    - flag_c and flag_e
     """
+    return any([flag_b and flag_c, flag_d and flag_e, flag_c and flag_e])
 
-    def _at_least_one_pair_true():
-        """Return True if any of the relevant pairs are both truthy.
 
-        The expression ``(b and c) or (d and e) or (c and e)`` is retained
-        but factored out so that the main ``return`` statement is simple.
-        """
-        return (b and c) or (d and e) or (c and e)
+def should_process(flag_a, flag_b, flag_c, flag_d, flag_e):
+    """Determine whether processing should occur based on the provided flags.
 
-    return a and _at_least_one_pair_true()
+    The heavy logical expression has been compacted into a helper function
+    for clarity while preserving the original behavior.
+    """
+    return flag_a and has_pair_true(flag_b, flag_c, flag_d, flag_e)
