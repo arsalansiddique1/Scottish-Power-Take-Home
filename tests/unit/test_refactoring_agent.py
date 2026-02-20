@@ -24,3 +24,19 @@ def f(flag):
     assert any(a.action_type == "rename_variable" for a in actions)
     assert any(a.action_type == "simplify_conditional" for a in actions)
     assert "camel_case_var" in updated_files[0].content
+
+
+def test_refactoring_agent_gracefully_falls_back_when_llm_not_available() -> None:
+    changed_files = [
+        ChangedFile(
+            file_path="src/y.py",
+            status="modified",
+            content="camelCaseVar = 1\n",
+        )
+    ]
+
+    agent = RefactoringAgent(client=None)
+    updated_files, actions = agent.apply(changed_files, findings=[])
+
+    assert actions
+    assert "camel_case_var" in updated_files[0].content

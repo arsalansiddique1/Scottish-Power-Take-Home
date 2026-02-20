@@ -109,5 +109,7 @@ Each review run generates:
 - Live Ollama mode is supported for semantic analysis with local open-source models.
 - Ollama inference is invoked via `langchain-ollama` (`ChatOllama`) for unified LangChain management.
 - Delegation mode runs as a LangGraph workflow with decision/refactor/verification nodes.
+- Delegation refactor node now performs LLM-assisted refactoring (with deterministic fallback transforms).
+- LangSmith traces should show both graph node transitions and model runs during delegated refactor flows.
 - LangSmith tracing can be enabled with `LANGSMITH_TRACING=true` and `LANGSMITH_API_KEY`.
 - Live PR flow retrieves commit history and includes commit metadata in summary/artifacts.

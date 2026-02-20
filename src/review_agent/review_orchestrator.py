@@ -5,6 +5,7 @@ from uuid import uuid4
 
 from review_agent.agents.delegation_manager import DelegationManager
 from review_agent.agents.graph import DelegationGraphRunner
+from review_agent.agents.refactoring_agent import RefactoringAgent
 from review_agent.analyzers.llm_client import OllamaLLMClient
 from review_agent.analyzers.llm_reviewer import LLMReviewer
 from review_agent.artifact_writer import ArtifactWriter
@@ -158,13 +159,22 @@ class ReviewOrchestrator:
         delegation_reasons: list[str] = []
         refactor_actions: list[dict[str, object]] = []
         verification_details: list[str] = []
+        handoff_log: list[str] = []
         refactor_commit_sha: str | None = None
 
         delegated_files = changed_files
         if enable_delegation:
             logger.info("stage=delegation_start")
+            refactoring_agent = RefactoringAgent(
+                client=llm_client,
+                model_profiles_path=self._model_profiles_path,
+                profile=llm_profile,
+                temperature=0.0,
+                timeout_seconds=self._settings.llm_timeout_seconds,
+            )
             graph_runner = DelegationGraphRunner(
-                delegation_manager=DelegationManager.from_yaml(self._thresholds_config_path)
+                delegation_manager=DelegationManager.from_yaml(self._thresholds_config_path),
+                refactoring_agent=refactoring_agent,
             )
             graph_result = graph_runner.run(
                 changed_files=changed_files,
@@ -183,6 +193,7 @@ class ReviewOrchestrator:
             delegation_reasons = decision.reasons
             refactor_actions = [action.model_dump() for action in actions]
             verification_details = verification.details
+            handoff_log = list(graph_result.get("handoff_log", []))
 
             if not decision.should_delegate:
                 delegation_status = "skipped"
@@ -253,12 +264,17 @@ class ReviewOrchestrator:
                         commit_message="chore(refactor-agent): apply safe automated refactors",
                     )
                 if refactor_commit_sha:
+                    action_lines = "\n".join(
+                        f"- `{a.get('file_path', '')}` `{a.get('action_type', '')}`: {a.get('description', '')}"
+                        for a in refactor_actions[:10]
+                    )
                     self._github_adapter.publish_summary_comment(
                         context=context,
                         body=(
                             "Refactoring agent committed safe updates to the PR branch.\n"
                             f"- commit: `{refactor_commit_sha}`\n"
-                            f"- actions: `{len(refactor_actions)}`"
+                            f"- actions: `{len(refactor_actions)}`\n"
+                            f"{action_lines}"
                         ),
                     )
                 logger.info("stage=commit_refactors_done sha=%s", refactor_commit_sha or "")
@@ -280,9 +296,10 @@ class ReviewOrchestrator:
                     "config_version": "v1",
                     "prompt_version": "p1",
                     "delegation_status": delegation_status,
-                    "commit_count": str(len(commit_history or [])),
-                },
-            )
+                "commit_count": str(len(commit_history or [])),
+                "handoff_log": " | ".join(handoff_log) if enable_delegation else "",
+            },
+        )
         logger.info("stage=complete run_id=%s findings=%s", resolved_run_id, len(findings))
 
         return {
@@ -298,6 +315,7 @@ class ReviewOrchestrator:
             "delegation_reasons": delegation_reasons,
             "refactor_actions": refactor_actions,
             "verification_details": verification_details,
+            "handoff_log": handoff_log if enable_delegation else [],
             "refactor_commit_sha": refactor_commit_sha,
             "commit_history_count": len(commit_history or []),
         }
