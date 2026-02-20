@@ -213,3 +213,39 @@ def test_build_line_comment_contains_problematic_code_and_suggested_fix() -> Non
     assert "camel_case_var = 1" in body
     assert "Docs: `PEP8-Naming`" in body
     assert "Reasoning:" in body
+
+
+def test_build_line_comment_uses_llm_replacement_code_for_clickable_suggestion() -> None:
+    findings = [
+        Finding(
+            rule_id="LLM_SEMANTIC_REVIEW",
+            category="quality",
+            severity="medium",
+            confidence=0.9,
+            file_path="src/a.py",
+            line=5,
+            title="Unsafe secret usage",
+            description="Avoid hardcoded secret.",
+            suggestion="Use environment variables.",
+            evidence="token = 'abc'",
+            problematic_code="token = 'abc'",
+            replacement_code='token = os.getenv("TOKEN")',
+            source="llm",
+        )
+    ]
+    changed_files = [
+        ChangedFile(
+            file_path="src/a.py",
+            status="modified",
+            content="\n\n\n\ntoken = 'abc'\n",
+            reviewable_lines=[5],
+        )
+    ]
+
+    comments = build_line_comments(findings, run_id="run-3", changed_files=changed_files)
+    assert len(comments) == 1
+    body = comments[0].body
+    assert "Problematic code:" in body
+    assert "token = 'abc'" in body
+    assert "```suggestion" in body
+    assert 'token = os.getenv("TOKEN")' in body

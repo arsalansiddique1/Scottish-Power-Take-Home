@@ -30,7 +30,7 @@ def test_llm_reviewer_prompt_includes_rules_and_diff_context() -> None:
                     "rule_id": "SECURITY_HARDCODED_SECRET",
                     "category": "security",
                     "severity": "high",
-                    "line": 3,
+                    "line": 1,
                     "title": "Potential hardcoded secret detected.",
                     "description": "Potential hardcoded secret detected.",
                     "suggestion": "Move secrets to env vars.",
@@ -111,3 +111,43 @@ def test_llm_reviewer_normalizes_unknown_rule_id() -> None:
 
     assert findings
     assert findings[0].rule_id == "LLM_SEMANTIC_REVIEW"
+
+
+def test_llm_reviewer_maps_non_reviewable_line_by_problematic_snippet() -> None:
+    fake = FakeClient(
+        response_payload={
+            "findings": [
+                {
+                    "rule_id": "LLM_SEMANTIC_REVIEW",
+                    "category": "quality",
+                    "severity": "medium",
+                    "line": 999,
+                    "title": "Issue",
+                    "description": "Issue",
+                    "suggestion": "Fix",
+                    "evidence": "token = 'abc'",
+                    "problematic_code": "token = 'abc'",
+                    "replacement_code": 'token = os.getenv("TOKEN")',
+                    "confidence": 0.8,
+                }
+            ]
+        }
+    )
+    reviewer = LLMReviewer(
+        client=fake,
+        model_profiles_path="config/model_profiles.yaml",
+        profile="fast",
+        rules=[],
+    )
+    changed = ChangedFile(
+        file_path="src/a.py",
+        status="modified",
+        patch="@@ -1,1 +1,1 @@\n-token = 'x'\n+token = 'abc'\n",
+        reviewable_lines=[1],
+        content="token = 'abc'\n",
+    )
+
+    findings = reviewer.review_files([changed], static_findings=[])
+
+    assert len(findings) == 1
+    assert findings[0].line == 1

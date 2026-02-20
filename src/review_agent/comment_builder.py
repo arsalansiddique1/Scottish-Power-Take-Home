@@ -114,9 +114,10 @@ def build_summary_comment(
 def _line_comment_body(finding: Finding, run_id: str, line_text: str) -> str:
     docs_line = f"\nDocs: `{finding.docs_ref}`" if finding.docs_ref else ""
     reasoning_line = f"\nReasoning: {finding.reasoning}" if finding.reasoning else ""
+    problematic = (finding.problematic_code or line_text).strip()
     code_block = (
-        f"\n\nProblematic code:\n```{_language_from_path(finding.file_path)}\n{line_text}\n```"
-        if line_text.strip()
+        f"\n\nProblematic code:\n```{_language_from_path(finding.file_path)}\n{problematic}\n```"
+        if problematic
         else ""
     )
     suggestion_block = _build_suggestion_block(finding, line_text)
@@ -223,6 +224,9 @@ def _language_from_path(file_path: str) -> str:
 
 
 def _build_suggestion_block(finding: Finding, line_text: str) -> str:
+    if finding.replacement_code and finding.replacement_code.strip():
+        return f"\n\nSuggested fix:\n```suggestion\n{finding.replacement_code.rstrip()}\n```"
+
     replacement = _suggested_replacement(finding, line_text)
     if replacement is None:
         return ""

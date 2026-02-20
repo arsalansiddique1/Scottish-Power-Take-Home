@@ -59,6 +59,9 @@ class Finding(BaseModel):
     evidence: str
     docs_ref: str | None = None
     reasoning: str | None = None
+    problematic_code: str | None = None
+    replacement_code: str | None = None
+    suggested_diff: str | None = None
     source: Literal["static", "llm"] = "static"
 
 
