@@ -67,8 +67,10 @@ class Finding(BaseModel):
 
 class PRLineComment(BaseModel):
     path: str
+    start_line: int | None = None
     line: int
     body: str
+    start_side: Literal["RIGHT"] | None = None
     side: Literal["RIGHT"] = "RIGHT"
 
 

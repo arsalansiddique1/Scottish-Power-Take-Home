@@ -31,9 +31,12 @@ def build_line_comments(
         line = _anchor_line_to_reviewable(finding.file_path, finding.line, reviewable_map)
         if line is None:
             continue
+        start_line, end_line = _comment_line_range(finding, line, reviewable_map)
+        if start_line is None or end_line is None:
+            continue
 
         normalized_problem = _issue_fingerprint(finding)
-        key = (finding.file_path, line, normalized_problem)
+        key = (finding.file_path, end_line, normalized_problem)
         if key in seen:
             continue
         if per_file_count.get(finding.file_path, 0) >= max_comments_per_file:
@@ -46,12 +49,14 @@ def build_line_comments(
         comments.append(
             PRLineComment(
                 path=finding.file_path,
-                line=line,
+                start_line=start_line if start_line != end_line else None,
+                line=end_line,
                 body=_line_comment_body(
                     finding=finding,
                     run_id=run_id,
-                    line_text=_line_text_for_comment(finding, line, file_line_map),
+                    line_text=_line_text_for_comment(finding, end_line, file_line_map),
                 ),
+                start_side="RIGHT" if start_line != end_line else None,
             )
         )
     return comments
@@ -229,7 +234,7 @@ def _build_suggestion_block(finding: Finding, line_text: str) -> str:
 
     replacement = _suggested_replacement(finding, line_text)
     if replacement is None:
-        return ""
+        replacement = _fallback_replacement(finding, line_text)
     return f"\n\nSuggested fix:\n```suggestion\n{replacement}\n```"
 
 
@@ -256,3 +261,68 @@ def _suggested_replacement(finding: Finding, line_text: str) -> str | None:
         return f'{leading}{name} = os.getenv("{env_name}")'
 
     return None
+
+
+def _comment_line_range(
+    finding: Finding,
+    anchored_line: int,
+    reviewable_map: dict[str, set[int]],
+) -> tuple[int | None, int | None]:
+    span_lines = _problematic_span_lines(finding)
+    start_line = anchored_line
+    end_line = anchored_line + span_lines - 1
+    if span_lines <= 1:
+        return anchored_line, anchored_line
+
+    if not _is_reviewable_range(finding.file_path, start_line, end_line, reviewable_map):
+        return anchored_line, anchored_line
+    return start_line, end_line
+
+
+def _problematic_span_lines(finding: Finding) -> int:
+    if finding.end_line and finding.end_line >= finding.line:
+        return (finding.end_line - finding.line) + 1
+    if finding.problematic_code and finding.problematic_code.strip():
+        return max(1, len([line for line in finding.problematic_code.splitlines() if line.strip()]))
+    return 1
+
+
+def _is_reviewable_range(
+    file_path: str,
+    start_line: int,
+    end_line: int,
+    reviewable_map: dict[str, set[int]],
+) -> bool:
+    if start_line <= 0 or end_line < start_line:
+        return False
+    if file_path not in reviewable_map:
+        return True
+    allowed = reviewable_map[file_path]
+    if not allowed:
+        return False
+    return all(line in allowed for line in range(start_line, end_line + 1))
+
+
+def _fallback_replacement(finding: Finding, line_text: str) -> str:
+    base = line_text.rstrip() if line_text.strip() else (finding.evidence or "TODO")
+    note = _shorten(finding.suggestion, limit=80)
+    comment_prefix = _comment_prefix_for_path(finding.file_path)
+    if comment_prefix:
+        return f"{base} {comment_prefix} TODO(review): {note}"
+    return f"{base}  TODO(review): {note}"
+
+
+def _comment_prefix_for_path(file_path: str) -> str:
+    suffix = Path(file_path).suffix.lower()
+    if suffix in {".py", ".rb", ".sh"}:
+        return "#"
+    if suffix in {".js", ".jsx", ".ts", ".tsx", ".java", ".go", ".rs", ".c", ".cpp", ".cs"}:
+        return "//"
+    return ""
+
+
+def _shorten(value: str, limit: int) -> str:
+    compact = re.sub(r"\s+", " ", value.strip())
+    if len(compact) <= limit:
+        return compact
+    return compact[: limit - 3].rstrip() + "..."

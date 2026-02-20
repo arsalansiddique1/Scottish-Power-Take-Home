@@ -249,3 +249,72 @@ def test_build_line_comment_uses_llm_replacement_code_for_clickable_suggestion()
     assert "token = 'abc'" in body
     assert "```suggestion" in body
     assert 'token = os.getenv("TOKEN")' in body
+
+
+def test_build_line_comments_supports_multiline_suggestion_ranges() -> None:
+    findings = [
+        Finding(
+            rule_id="LLM_SEMANTIC_REVIEW",
+            category="quality",
+            severity="high",
+            confidence=0.95,
+            file_path="src/a.py",
+            line=10,
+            end_line=11,
+            title="Simplify duplicated returns",
+            description="Two-line duplicated return branch can be simplified.",
+            suggestion="Collapse into one return path.",
+            evidence="if x:\n    return y",
+            problematic_code="if x:\n    return y",
+            replacement_code="return y",
+            source="llm",
+        )
+    ]
+    changed_files = [
+        ChangedFile(
+            file_path="src/a.py",
+            status="modified",
+            content="\n" * 9 + "if x:\n    return y\n",
+            reviewable_lines=[10, 11],
+        )
+    ]
+
+    comments = build_line_comments(findings, run_id="run-4", changed_files=changed_files)
+
+    assert len(comments) == 1
+    comment = comments[0]
+    assert comment.start_line == 10
+    assert comment.line == 11
+    assert comment.start_side == "RIGHT"
+    assert "```suggestion" in comment.body
+
+
+def test_build_line_comments_always_includes_fallback_suggestion_block() -> None:
+    findings = [
+        Finding(
+            rule_id="BP_MISSING_ERROR_HANDLING",
+            category="best_practice",
+            severity="medium",
+            confidence=0.9,
+            file_path="src/a.py",
+            line=3,
+            title="Missing handling",
+            description="Risky operation lacks explicit handling.",
+            suggestion="Wrap call in try/except.",
+            evidence="result = risky_call()",
+            source="llm",
+        )
+    ]
+    changed_files = [
+        ChangedFile(
+            file_path="src/a.py",
+            status="modified",
+            content="\n\nresult = risky_call()\n",
+            reviewable_lines=[3],
+        )
+    ]
+
+    comments = build_line_comments(findings, run_id="run-5", changed_files=changed_files)
+
+    assert len(comments) == 1
+    assert "```suggestion" in comments[0].body
