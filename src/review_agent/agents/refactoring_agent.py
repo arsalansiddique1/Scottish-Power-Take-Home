@@ -1,4 +1,5 @@
 import json
+import ast
 import re
 from pathlib import Path
 from typing import Any, Protocol
@@ -48,6 +49,7 @@ class RefactoringAgent:
         for changed_file in changed_files:
             code = build_analysis_text(changed_file)
             transformed = code
+            original = code
             file_actions: list[RefactorAction] = []
 
             if self._is_refactorable_file(changed_file.file_path):
@@ -57,8 +59,21 @@ class RefactoringAgent:
                     findings_by_file.get(changed_file.file_path, []),
                 )
                 if llm_transformed != transformed and llm_actions:
-                    transformed = llm_transformed
-                    file_actions.extend(llm_actions)
+                    if self._is_valid_refactor(changed_file.file_path, llm_transformed):
+                        transformed = llm_transformed
+                        file_actions.extend(llm_actions)
+                    else:
+                        file_actions.append(
+                            RefactorAction(
+                                file_path=changed_file.file_path,
+                                action_type="reject_invalid_llm_refactor",
+                                description=(
+                                    "Rejected LLM refactor because syntax verification failed; "
+                                    "kept original content."
+                                ),
+                                applied=False,
+                            )
+                        )
 
             transformed, action1 = self._rename_camel_case_assignments(changed_file.file_path, transformed)
             if action1:
@@ -69,6 +84,19 @@ class RefactoringAgent:
             )
             if action2:
                 file_actions.append(action2)
+
+            if not self._is_valid_refactor(changed_file.file_path, transformed):
+                transformed = original
+                file_actions.append(
+                    RefactorAction(
+                        file_path=changed_file.file_path,
+                        action_type="rollback_invalid_refactor",
+                        description=(
+                            "Rolled back refactor output because final syntax verification failed."
+                        ),
+                        applied=False,
+                    )
+                )
 
             updated_files.append(
                 changed_file.model_copy(update={"content": transformed, "patch": changed_file.patch})
@@ -237,3 +265,13 @@ class RefactoringAgent:
 
     def _is_refactorable_file(self, file_path: str) -> bool:
         return file_path.endswith((".py", ".js", ".ts", ".tsx", ".java", ".go", ".rs", ".cs"))
+
+    def _is_valid_refactor(self, file_path: str, content: str) -> bool:
+        if not content.strip():
+            return False
+        if file_path.endswith(".py"):
+            try:
+                ast.parse(content)
+            except SyntaxError:
+                return False
+        return True
