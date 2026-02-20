@@ -12,6 +12,7 @@ import io
 from fastapi import BackgroundTasks, FastAPI, Header, HTTPException, Request
 from fastapi.responses import StreamingResponse
 
+from review_agent.github_adapter import GithubAdapter
 from review_agent.review_orchestrator import ReviewOrchestrator
 from review_agent.settings import get_settings
 
@@ -19,6 +20,7 @@ app = FastAPI(title="Automated PR Reviewer Webhook")
 logger = logging.getLogger(__name__)
 
 _RUN_STATE: dict[str, dict[str, Any]] = {}
+AUTO_REFACTOR_COMMIT_PREFIX = "chore(refactor-agent):"
 
 
 @app.post("/webhook/github")
@@ -164,6 +166,28 @@ def _process_pr_review_task(
             f"start delivery_id={delivery_id} run_id={run_id} repo={repo_full_name} pr={pr_number} action={action}"
         )
         settings = get_settings()
+        github_adapter = GithubAdapter(token=settings.github_token)
+        context = github_adapter.get_pr_context(
+            repo_full_name=repo_full_name,
+            pr_number=pr_number,
+            action=action,
+        )
+        commit_history = github_adapter.get_commit_history(context=context, limit=1)
+        if commit_history:
+            latest_message = (commit_history[0].message or "").strip().lower()
+            if latest_message.startswith(AUTO_REFACTOR_COMMIT_PREFIX):
+                _append_webhook_log(
+                    "ignored_self_refactor_commit "
+                    f"delivery_id={delivery_id} run_id={run_id} "
+                    f"repo={repo_full_name} pr={pr_number}"
+                )
+                _update_run_state(
+                    run_id,
+                    status="success",
+                    error="",
+                    artifacts={},
+                )
+                return
         orchestrator = ReviewOrchestrator(settings=settings)
         result = orchestrator.run_pr_review(
             repo_full_name=repo_full_name,

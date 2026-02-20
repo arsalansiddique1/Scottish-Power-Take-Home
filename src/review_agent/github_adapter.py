@@ -1,5 +1,6 @@
 import time
 from collections.abc import Callable
+import logging
 from typing import Any
 
 from github import Auth
@@ -10,6 +11,7 @@ from review_agent.diff_parser import extract_reviewable_added_lines
 from review_agent.models import ChangedFile, CommitInfo, PRContext, PRLineComment
 
 RETRYABLE_STATUS_CODES = {403, 429, 500, 502, 503, 504}
+logger = logging.getLogger(__name__)
 
 
 class GithubAdapter:
@@ -138,9 +140,47 @@ class GithubAdapter:
                 if comment.start_line is not None and comment.start_side is not None:
                     payload["start_line"] = comment.start_line
                     payload["start_side"] = comment.start_side
-                pr.create_review_comment(**payload)
+                self._create_review_comment_with_fallback(pr, payload)
 
         self._run_with_retries(operation)
+
+    def _create_review_comment_with_fallback(
+        self,
+        pr: Any,
+        payload: dict[str, object],
+    ) -> None:
+        try:
+            pr.create_review_comment(**payload)
+            return
+        except GithubException as exc:
+            status = int(getattr(exc, "status", 0) or 0)
+            if status != 422:
+                raise
+
+            # First fallback: if this is a multi-line range comment, retry as single-line.
+            if "start_line" in payload:
+                single_line_payload = dict(payload)
+                single_line_payload.pop("start_line", None)
+                single_line_payload.pop("start_side", None)
+                try:
+                    pr.create_review_comment(**single_line_payload)
+                    logger.warning(
+                        "publish_line_comment_fallback_single_line path=%s line=%s",
+                        str(payload.get("path", "")),
+                        str(payload.get("line", "")),
+                    )
+                    return
+                except GithubException as exc2:
+                    status2 = int(getattr(exc2, "status", 0) or 0)
+                    if status2 != 422:
+                        raise
+
+            # Final fallback: skip unresolved anchor but continue other comments.
+            logger.warning(
+                "publish_line_comment_skipped_unresolved path=%s line=%s",
+                str(payload.get("path", "")),
+                str(payload.get("line", "")),
+            )
 
     def publish_summary_comment(self, context: PRContext, body: str) -> None:
         def operation() -> None:
