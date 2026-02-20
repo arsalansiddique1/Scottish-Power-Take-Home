@@ -2,7 +2,7 @@
 
 Automated code review pipeline for GitHub pull requests using:
 - static rule-based analysis
-- LLM semantic analysis (Ollama)
+- LLM semantic analysis (Ollama) with rule-aware prompting from coding standards
 - actionable review-comment generation
 - reproducible artifacts (JSONL/JSON/CSV)
 - LangGraph-based multi-agent delegation/refactor/verification
@@ -108,6 +108,7 @@ Each review run generates:
 ## Notes
 - Live Ollama mode is supported for semantic analysis with local open-source models.
 - Ollama inference is invoked via `langchain-ollama` (`ChatOllama`) for unified LangChain management.
+- Baseline LLM prompt includes rule catalog, diff-hunk context, file metadata, and requires structured rule-mapped findings.
 - Delegation mode runs as a LangGraph workflow with decision/refactor/verification nodes.
 - Delegation refactor node now performs LLM-assisted refactoring (with deterministic fallback transforms).
 - LangSmith traces should show both graph node transitions and model runs during delegated refactor flows.

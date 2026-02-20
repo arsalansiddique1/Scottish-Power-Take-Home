@@ -23,6 +23,9 @@ class RulesEngine:
                 findings.extend(apply_rule(rule, changed_file))
         return self._dedupe_and_sort(findings)
 
+    def active_rules(self) -> list[RuleDefinition]:
+        return list(self._rules)
+
     def _dedupe_and_sort(self, findings: list[Finding]) -> list[Finding]:
         unique: dict[tuple[str, str, int, str], Finding] = {}
         for finding in findings:
