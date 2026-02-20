@@ -1,17 +1,26 @@
-def has_any_pair_meets(b, c, d, e):
-    """Return True if at least one of the following pairs is True:
-    - b and c
-    - d and e
-    - c and e
-    """
-    return any((b and c, d and e, c and e))
-
-
 def should_process(a, b, c, d, e):
-    """Determine whether processing should occur based on the provided flags.
+    """Determine whether the process should run.
 
-    The original implementation performed a single, complex logical
-    expression.  This refactoring extracts the pair‑checking logic into a
-    helper function for readability while preserving the exact behavior.
+    The original implementation combined several AND/OR clauses
+    in a single return statement, which made it difficult to read and
+    reason about. ``should_process`` now delegates the complex part to
+    ``is_valid_combination`` which clearly describes the intent of the
+    predicate.
+
+    Parameters
+    ----------
+    a, b, c, d, e : bool
+        Input flags.
+
+    Returns
+    -------
+    bool
+        ``True`` only when ``a`` is true and at least one of the
+        following combinations is satisfied: ``b and c``, ``d and e`` or
+        ``c and e``.
     """
-    return a and has_any_pair_meets(b, c, d, e)
+    return a and is_valid_combination(b, c, d, e)
+
+
+def is_valid_combination(b, c, d, e):
+    return any((b and c, d and e, c and e))
