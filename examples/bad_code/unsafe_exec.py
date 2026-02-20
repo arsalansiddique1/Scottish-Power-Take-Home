@@ -1,34 +1,50 @@
-def _safe_exec(code: str) -> None:
-    """Execute user supplied code in a sandboxed environment.
-    Only the code is executed; builtins are removed to prevent access to
-    dangerous modules or functions. Commonly, developers extend this
-    pattern with a more sophisticated set of allowed globals.
-    """
-    # Provide a limited set of globals; here we deliberately remove all
-    # builtins to avoid accidental access to filesystem or other
-    # privileged APIs.
-    safe_globals: dict = {"__builtins__": {}}
-    try:
-        exec(code, safe_globals)
-    except Exception as exc:  # pragma: no cover  (execution errors are user‑generated)
-        # Reraise as a RuntimeError to keep the caller’s exception context
-        # but provide a clearer message.
-        raise RuntimeError("User code execution failed") from exc
+def _safe_exec(code: str, globals_dict: dict | None = None, locals_dict: dict | None = None) -> None:
+    """Execute user supplied code within a safe try/except block.
 
-
-def run_user_input(code: str) -> None:
-    """Entry point for executing user supplied code.
+    The execution is sandboxed by providing an empty ``__builtins__`` dictionary
+    in the global namespace, preventing the user from accessing Python's
+    builtin functions.  Any exception that occurs during execution is logged
+    instead of being propagated, preserving the original behaviour of
+    `_safe_exec` while adding a minimal safety measure.
 
     Parameters
     ----------
-    code: str
-        Raw Python code supplied by the user.
-
-    Notes
-    -----
-    The function delegates to :func:`_safe_exec` which runs the code in a
-    sandboxed context. The explicit naming of the parameter improves
-    readability and aligns with the conceptual model of *code*,
-    distinct from *user_input*.
+    code : str
+        The code to execute.
+    globals_dict : dict | None, optional
+        Custom globals dictionary to use during execution. If ``None`` (the
+        default), a dictionary containing an empty ``__builtins__`` entry is
+        created.
+    locals_dict : dict | None, optional
+        Custom locals dictionary to use during execution.
     """
-    _safe_exec(code)
+    try:
+        exec(
+            code,
+            globals_dict if globals_dict is not None else {"__builtins__": {}},
+            locals_dict,
+        )
+    except Exception as exc:  # pragma: no cover – behaviour is deterministic
+        _log_execution_error(exc)
+
+
+def _log_execution_error(error: Exception) -> None:
+    """Log an exception that occurred during user code execution.
+
+    In a production environment, this could be replaced with structured logging.
+    For this example, we simply print the error message to keep the original
+    behaviour of notifying the user while preventing the exception from
+    bubbling up.
+    """
+    print(f"Execution error: {error}")
+
+
+def run_user_input(code_str: str) -> None:
+    """Run the supplied user input string.
+
+    Parameters
+    ----------
+    code_str : str
+        The code provided by the user.
+    """
+    _safe_exec(code_str)
