@@ -32,6 +32,8 @@ def test_graph_routes_to_refactor_when_delegation_true() -> None:
     result = runner.run(files, findings)
     assert result["delegation_decision"].should_delegate is True
     assert result["refactor_actions"]
+    assert result["handoff_log"]
+    assert "review_agent->refactoring_agent" in result["handoff_log"][0]
 
 
 def test_graph_skips_refactor_when_delegation_false() -> None:
@@ -44,3 +46,4 @@ def test_graph_skips_refactor_when_delegation_false() -> None:
     result = runner.run(files, findings)
     assert result["delegation_decision"].should_delegate is False
     assert result["refactor_actions"] == []
+    assert result["handoff_log"]

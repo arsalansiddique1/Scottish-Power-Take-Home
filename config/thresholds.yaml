@@ -3,3 +3,5 @@ thresholds:
   high_severity_in_file_threshold: 2
   quality_or_security_findings_threshold: 2
   complex_conditional_trigger_rule: QUALITY_COMPLEX_CONDITIONAL
+  enable_test_coverage_signal: true
+  test_coverage_signal_min_findings: 2
