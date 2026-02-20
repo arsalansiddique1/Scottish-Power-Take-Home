@@ -1,17 +1,17 @@
-def has_pair_true(flag_b, flag_c, flag_d, flag_e):
-    """Return True if any of the following flag pairs are simultaneously True:
-
-    - flag_b and flag_c
-    - flag_d and flag_e
-    - flag_c and flag_e
+def _has_any_pair_meets(b, c, d, e):
+    """Return True if at least one of the following pairs is True:
+    - b and c
+    - d and e
+    - c and e
     """
-    return any([flag_b and flag_c, flag_d and flag_e, flag_c and flag_e])
+    return any((b and c, d and e, c and e))
 
 
-def should_process(flag_a, flag_b, flag_c, flag_d, flag_e):
+def should_process(a, b, c, d, e):
     """Determine whether processing should occur based on the provided flags.
 
-    The heavy logical expression has been compacted into a helper function
-    for clarity while preserving the original behavior.
+    The original implementation performed a single, complex logical
+    expression. This refactoring extracts the pair‑checking logic into
+    a helper function for readability while preserving the exact behavior.
     """
-    return flag_a and has_pair_true(flag_b, flag_c, flag_d, flag_e)
+    return a and _has_any_pair_meets(b, c, d, e)
