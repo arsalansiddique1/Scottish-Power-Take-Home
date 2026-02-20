@@ -1,6 +1,4 @@
 def compute(flag):
-    camelCaseResult = 1
-    if flag:
-        return camelCaseResult
-    else:
-        return camelCaseResult
+    camel_case_result = 1
+    # simplified duplicated branch
+return camel_case_result
