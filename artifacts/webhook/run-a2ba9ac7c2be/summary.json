@@ -1,0 +1,14 @@
+{
+  "summary_comment": "## Automated Review Summary\n- run_id: `run-a2ba9ac7c2be`\n- head_sha: `f875c62ecd6da92e2290915d2d8d5ff4cc419a2b`\n- model: `gpt-oss:20b-cloud`\n- config_version: `v1`\n- prompt_version: `p1`\n- delegation_status: `delegated_verified`\n- total_findings: `10`\n- severity_counts: critical=0, high=3, medium=2, low=5\n- category_counts: security=3, quality=2, style=5, best_practice=0\n\n### Top Findings\n- [HIGH] `SECURITY_HARDCODED_SECRET` at `examples/bad_code_v2/secret_and_naming.py:5` - Hardcoded default service token present in code\n- [HIGH] `SECURITY_UNSAFE_EXEC` at `examples/bad_code_v2/unsafe_eval.py:2` - Potentially unsafe dynamic code execution\n- [HIGH] `SECURITY_UNSAFE_EXEC` at `examples/bad_code_v2/unsafe_eval.py:2` - Potentially unsafe dynamic code execution found.\n\n### Commit History Snapshot\n- commits_analyzed: `5`\n- latest_commit: `89dbd04d574b0c981be38b3913dc4048cfd7b10c`",
+  "run_metadata": {
+    "run_id": "run-a2ba9ac7c2be",
+    "head_sha": "f875c62ecd6da92e2290915d2d8d5ff4cc419a2b",
+    "model_name": "gpt-oss:20b-cloud",
+    "config_version": "v1",
+    "prompt_version": "p1",
+    "delegation_status": "delegated_verified",
+    "commit_count": "5",
+    "handoff_log": "review_agent->refactoring_agent reasons=complexity_trigger_rule_detected,high_severity_in_file>=2,low_test_coverage_signal,quality_or_security_findings>=2,total_findings>=2 | refactoring_agent->verification_agent actions=3 | verification_agent passed=True"
+  },
+  "total_findings": 10
+}

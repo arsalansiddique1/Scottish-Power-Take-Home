@@ -1,0 +1,13 @@
+{
+  "summary_comment": "## Automated Review Summary\n- run_id: `91c6683263d7`\n- head_sha: `726f8a7e6607736ce67c41852409194127e35e45`\n- model: `gpt-oss:20b-cloud`\n- config_version: `v1`\n- prompt_version: `p1`\n- delegation_status: `delegated_verified`\n- total_findings: `58`\n- severity_counts: critical=4, high=10, medium=25, low=19\n- category_counts: security=11, quality=22, style=17, best_practice=8\n\n### Top Findings\n- [CRITICAL] `SEC002` at `examples/pr_webhook_test.py:5` - Unrestricted exec on User Input\n- [CRITICAL] `LLM_REVIEWER_UNDEFINED_FUNC` at `src/review_agent/analyzers/llm_reviewer.py:19` - Undefined helper methods used in LLMReviewer\n- [CRITICAL] `LLM_REVIEWER_SYNTAX` at `src/review_agent/analyzers/llm_reviewer.py:43` - Typo in _strip_code_fences method\n\n### Commit History Snapshot\n- commits_analyzed: `13`\n- latest_commit: `c75a934440332532f29aa6b469a6a3774961b16f`",
+  "run_metadata": {
+    "run_id": "91c6683263d7",
+    "head_sha": "726f8a7e6607736ce67c41852409194127e35e45",
+    "model_name": "gpt-oss:20b-cloud",
+    "config_version": "v1",
+    "prompt_version": "p1",
+    "delegation_status": "delegated_verified",
+    "commit_count": "13"
+  },
+  "total_findings": 58
+}

@@ -16,7 +16,9 @@ venv/
 .env.*
 
 # Runtime/generated outputs
-artifacts/
+artifacts/*
+!artifacts/webhook/
+!artifacts/webhook/**
 
 # OS/editor noise
 .DS_Store

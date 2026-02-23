@@ -1,0 +1,2 @@
+run_id,head_sha,total_findings,critical,high,medium,low,static,llm
+run-ef7ff4abe5d2,f875c62ecd6da92e2290915d2d8d5ff4cc419a2b,13,0,3,3,7,2,11

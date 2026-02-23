@@ -1,0 +1,14 @@
+{
+  "summary_comment": "## Automated Review Summary\n- run_id: `run-32a380c4c89c`\n- head_sha: `74846dcd94e135df5065267937a8cafad62c15e7`\n- model: `gpt-oss:20b-cloud`\n- config_version: `v1`\n- prompt_version: `p1`\n- delegation_status: `delegated_verified`\n- total_findings: `15`\n- severity_counts: critical=0, high=4, medium=4, low=7\n- category_counts: security=4, quality=2, style=7, best_practice=2\n\n### Top Findings\n- [HIGH] `SECURITY_HARDCODED_SECRET` at `examples/bad_code_v2/secret_and_naming.py:1` - Hardcoded secret in source code\n- [HIGH] `SECURITY_HARDCODED_SECRET` at `examples/bad_code_v2/secret_and_naming.py:1` - Potential hardcoded secret detected.\n- [HIGH] `SECURITY_UNSAFE_EXEC` at `examples/bad_code_v2/unsafe_eval.py:2` - Use of eval for arbitrary code execution\n\n### Commit History Snapshot\n- commits_analyzed: `5`\n- latest_commit: `89dbd04d574b0c981be38b3913dc4048cfd7b10c`",
+  "run_metadata": {
+    "run_id": "run-32a380c4c89c",
+    "head_sha": "74846dcd94e135df5065267937a8cafad62c15e7",
+    "model_name": "gpt-oss:20b-cloud",
+    "config_version": "v1",
+    "prompt_version": "p1",
+    "delegation_status": "delegated_verified",
+    "commit_count": "5",
+    "handoff_log": "review_agent->refactoring_agent reasons=complexity_trigger_rule_detected,high_severity_in_file>=2,low_test_coverage_signal,quality_or_security_findings>=2,total_findings>=2 | refactoring_agent->verification_agent actions=12 | verification_agent passed=True"
+  },
+  "total_findings": 15
+}

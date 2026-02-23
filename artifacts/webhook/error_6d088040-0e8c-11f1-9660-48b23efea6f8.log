@@ -1,0 +1,27 @@
+Traceback (most recent call last):
+  File "C:\Users\arsal\OneDrive\Documents\Scottish Power Take Home Test\src\review_agent\webhook_listener.py", line 168, in _process_pr_review_task
+    result = orchestrator.run_pr_review(
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\arsal\OneDrive\Documents\Scottish Power Take Home Test\src\review_agent\review_orchestrator.py", line 96, in run_pr_review
+    return self._run_pipeline(
+           ^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\arsal\OneDrive\Documents\Scottish Power Take Home Test\src\review_agent\review_orchestrator.py", line 242, in _run_pipeline
+    self._github_adapter.publish_line_comments(
+  File "C:\Users\arsal\OneDrive\Documents\Scottish Power Take Home Test\src\review_agent\github_adapter.py", line 143, in publish_line_comments
+    self._run_with_retries(operation)
+  File "C:\Users\arsal\OneDrive\Documents\Scottish Power Take Home Test\src\review_agent\github_adapter.py", line 213, in _run_with_retries
+    raise last_error
+  File "C:\Users\arsal\OneDrive\Documents\Scottish Power Take Home Test\src\review_agent\github_adapter.py", line 200, in _run_with_retries
+    return operation()
+           ^^^^^^^^^^^
+  File "C:\Users\arsal\OneDrive\Documents\Scottish Power Take Home Test\src\review_agent\github_adapter.py", line 141, in operation
+    pr.create_review_comment(**payload)
+  File "C:\Users\arsal\AppData\Local\pypoetry\Cache\virtualenvs\automated-pr-reviewer-d2usovAw-py3.12\Lib\site-packages\github\PullRequest.py", line 516, in create_review_comment
+    headers, data = self._requester.requestJsonAndCheck("POST", f"{self.url}/comments", input=post_parameters)
+                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\arsal\AppData\Local\pypoetry\Cache\virtualenvs\automated-pr-reviewer-d2usovAw-py3.12\Lib\site-packages\github\Requester.py", line 623, in requestJsonAndCheck
+    return self.__check(
+           ^^^^^^^^^^^^^
+  File "C:\Users\arsal\AppData\Local\pypoetry\Cache\virtualenvs\automated-pr-reviewer-d2usovAw-py3.12\Lib\site-packages\github\Requester.py", line 853, in __check
+    raise self.createException(status, responseHeaders, data)
+github.GithubException.GithubException: Validation Failed: 422 {"message": "Validation Failed", "errors": [{"resource": "PullRequestReviewComment", "code": "custom", "field": "pull_request_review_thread.line", "message": "could not be resolved"}], "documentation_url": "https://docs.github.com/rest/pulls/comments#create-a-review-comment-for-a-pull-request", "status": "422"}
