@@ -1,116 +1,146 @@
 # Automated PR Reviewer
 
-Automated code review pipeline for GitHub pull requests using:
-- static rule-based analysis
-- LLM semantic analysis (Ollama) with rule-aware prompting from coding standards
-- actionable review-comment generation
-- reproducible artifacts (JSONL/JSON/CSV)
-- LangGraph-based multi-agent delegation/refactor/verification
-- optional LangSmith tracing for run observability
+Webhook-driven automated PR reviewer with:
+- rule-aware static + LLM analysis
+- line-level GitHub PR comments (with suggestion blocks)
+- LangGraph delegation (review -> refactor -> verification)
+- machine-readable artifacts (`JSONL` / `JSON` / `CSV`)
+- optional LangSmith tracing
 
-## Quick Start (Under 5 Minutes)
+## Reviewer Quick Setup
 
-### 1. Install dependencies
+### 1. Prerequisites
+- Python `3.11` or `3.12`
+- Poetry `2.x`
+- Ollama running locally (`http://localhost:11434`)
+- GitHub Personal Access Token with repo access
+- ngrok (or equivalent tunnel) for webhook testing
+
+### 2. Install dependencies
 ```bash
 poetry install
 ```
 
-### 2. Verify setup
-```bash
-poetry run review-agent healthcheck
+### 3. Create `.env`
+Use this template:
+
+```env
+GITHUB_TOKEN=ghp_xxx
+WEBHOOK_SECRET=replace_with_random_secret
+
+LLM_BASE_URL=http://localhost:11434
+LLM_MODEL=qwen2.5-coder:7b
+LLM_PROFILE=fast
+LLM_TIMEOUT_SECONDS=180
+
+LANGSMITH_TRACING=false
+LANGSMITH_API_KEY=
+LANGSMITH_PROJECT=automated-pr-reviewer
+LANGSMITH_ENDPOINT=https://api.smith.langchain.com
 ```
 
-### 3. Run baseline review with fixture input (live Ollama)
+### 4. Verify local setup
 ```bash
+poetry run review-agent healthcheck
 poetry run review-agent run-fixture-review --run-id sample-run --output-dir artifacts/sample
 ```
 
-### 3b. Run with Phase 6 multi-agent delegation enabled
-```bash
-poetry run review-agent run-fixture-review --run-id sample-delegate --output-dir artifacts/sample-delegate --enable-delegation
-```
+## Run Webhook Service
 
-### 4. Run tests and lint
-```bash
-poetry run pytest -q
-poetry run ruff check .
-```
-
-## Live GitHub PR Review
-
-Set required environment variables:
-```bash
-$env:GITHUB_TOKEN="your_token"         # PowerShell
-$env:LLM_BASE_URL="http://localhost:11434"
-$env:LLM_MODEL="qwen2.5-coder:14b"
-$env:LLM_TIMEOUT_SECONDS="180"
-$env:LANGSMITH_TRACING="true"
-$env:LANGSMITH_API_KEY="lsv2_..."
-$env:LANGSMITH_PROJECT="automated-pr-reviewer"
-```
-
-Run review against a live PR:
-```bash
-poetry run review-agent run-pr-review --repo owner/repo --pr-number 123 --action synchronize --enable-delegation
-```
-
-To allow safe automated refactor commit back to the PR branch:
-```bash
-poetry run review-agent run-pr-review --repo owner/repo --pr-number 123 --action synchronize --enable-delegation --auto-commit-refactors
-```
-
-## Webhook Mode
-
-Start webhook service:
+Start the app:
 ```bash
 poetry run uvicorn review_agent.webhook_listener:app --host 0.0.0.0 --port 8000
 ```
 
-Endpoint:
+Start ngrok:
+```bash
+ngrok http 8000
+```
+
+Use webhook endpoint:
+`https://<ngrok-domain>/webhook/github`
+
+## Configure GitHub Webhook
+
+In repository `Settings -> Webhooks -> Add webhook`:
+- Payload URL: `https://<ngrok-domain>/webhook/github`
+- Content type: `application/json`
+- Secret: same value as `.env` `WEBHOOK_SECRET`
+- Events: `Pull requests` (and optionally `Push` for diagnostics)
+
+Expected behavior:
+- PR open/update triggers webhook
+- Service runs review in background
+- Comments + summary posted to PR
+
+## Webhook API
+
 - `POST /webhook/github`
-- Verifies `X-Hub-Signature-256` using `WEBHOOK_SECRET`
-- Handles PR actions: `opened`, `synchronize`, `reopened`, `ready_for_review`
-- Returns immediately with `run_id` and processes the review in a background task
+- `GET /webhook/status/{run_id}`
+- `GET /webhook/artifacts/{run_id}`
 
-Run tracking endpoints:
-- `GET /webhook/status/{run_id}`: returns `accepted|running|success|failed`
-- `GET /webhook/artifacts/{run_id}`: downloads a zip containing `summary.json`, `findings.jsonl`, `metrics.csv` when status is `success`
+Artifacts are written under:
+- `artifacts/webhook/<run_id>/findings.jsonl`
+- `artifacts/webhook/<run_id>/summary.json`
+- `artifacts/webhook/<run_id>/metrics.csv`
 
-## Optional: Run with live Ollama
+## Baseline Analysis Pipeline
 
-1. Start Ollama locally (`http://localhost:11434`).
-2. Pull a model (example):
-```bash
-ollama pull qwen2.5-coder:7b
+1. Ingest PR metadata, files, patches, full file contents, commit history.
+2. Parse reviewable diff lines from patch hunks.
+3. Load coding rules from `config/coding_standards.yaml` (7 baseline rules).
+4. Run static detectors (`regex`, `AST`, `heuristic`, `line_length`).
+5. Run LLM reviewer with rule catalog + diff context + file metadata.
+6. Build anchored PR comments and publish to GitHub.
+7. Write deterministic artifacts and summary.
+
+## Delegation (Advanced)
+
+When enabled, LangGraph runs:
+- `decide_delegation` -> `run_refactor` -> `run_verification`
+
+Delegation thresholds are configured in:
+- `config/thresholds.yaml`
+
+Refactor behavior:
+- LLM-assisted refactor proposals
+- deterministic fallback refactors
+- syntax safety checks
+- rollback to original content on invalid refactor output
+
+Auto-commit behavior:
+- Webhook path can auto-commit verified refactors.
+- Self-trigger loop guards are implemented:
+- skip if latest commit is already from `chore(refactor-agent):...`
+- cap automated refactor commits per PR history
+
+## Optional LangSmith Tracing
+
+Set:
+```env
+LANGSMITH_TRACING=true
+LANGSMITH_API_KEY=lsv2_xxx
+LANGSMITH_PROJECT=automated-pr-reviewer
 ```
-3. Run review:
-```bash
-poetry run review-agent run-fixture-review --run-id live-run
-```
 
-## Project Layout
-- `src/review_agent/`: core implementation
-- `config/coding_standards.yaml`: static review rules
-- `config/model_profiles.yaml`: LLM model profiles
-- `config/thresholds.yaml`: delegation thresholds
-- `examples/`: fixture payload/diff + expected output
-- `tests/`: unit, integration, and e2e tests
-- `artifacts/`: generated machine-readable outputs
-- `docs/architecture.md`: architecture diagrams
-- `docs/presentation_outline.md`: required presentation content
+You should see traces for:
+- static analysis
+- LLM review
+- delegation graph
+- publish comments
+- artifact writing
 
-## Baseline Output Files
-Each review run generates:
-- `findings.jsonl`
-- `summary.json`
-- `metrics.csv`
+## Troubleshooting
 
-## Notes
-- Live Ollama mode is supported for semantic analysis with local open-source models.
-- Ollama inference is invoked via `langchain-ollama` (`ChatOllama`) for unified LangChain management.
-- Baseline LLM prompt includes rule catalog, diff-hunk context, file metadata, and requires structured rule-mapped findings.
-- Delegation mode runs as a LangGraph workflow with decision/refactor/verification nodes.
-- Delegation refactor node now performs LLM-assisted refactoring (with deterministic fallback transforms).
-- LangSmith traces should show both graph node transitions and model runs during delegated refactor flows.
-- LangSmith tracing can be enabled with `LANGSMITH_TRACING=true` and `LANGSMITH_API_KEY`.
-- Live PR flow retrieves commit history and includes commit metadata in summary/artifacts.
+- `Webhook signature mismatch`
+  - Ensure GitHub webhook secret exactly matches `.env` `WEBHOOK_SECRET`.
+
+- `ModuleNotFoundError: langchain_ollama`
+  - Run `poetry install` and start using `poetry run ...`.
+
+- `422 pull_request_review_thread.line could not be resolved`
+  - Anchoring fallback is implemented; unresolved comments are skipped instead of failing entire run.
+
+- Webhook accepted but no comments posted
+  - Check `artifacts/webhook/webhook.log`
+  - Verify `GITHUB_TOKEN` permissions and Ollama availability.
