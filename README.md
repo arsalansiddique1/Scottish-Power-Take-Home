@@ -29,7 +29,7 @@ GITHUB_TOKEN=ghp_xxx
 WEBHOOK_SECRET=replace_with_random_secret
 
 LLM_BASE_URL=http://localhost:11434
-LLM_MODEL=qwen2.5-coder:7b
+LLM_MODEL=gpt-oss:20b-cloud
 LLM_PROFILE=fast
 LLM_TIMEOUT_SECONDS=180
 
