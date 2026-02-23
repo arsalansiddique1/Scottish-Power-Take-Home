@@ -94,6 +94,17 @@ Artifacts are written under:
 6. Build anchored PR comments and publish to GitHub.
 7. Write deterministic artifacts and summary.
 
+## Customize Review Rules
+
+To change what the reviewer enforces:
+1. Edit `config/coding_standards.yaml` and add/remove/update rule definitions.
+2. Keep coverage across Style, Quality, Security, and Best Practices (target 5-7 rules for the baseline).
+3. Commit the config change and re-run the webhook review (or `run-fixture-review`) to apply the new rule set.
+
+Related config:
+- `config/thresholds.yaml`: delegation trigger criteria.
+- `config/model_profiles.yaml`: model/profile mapping used by the LLM reviewer/refactor agent.
+
 ## Delegation (Advanced)
 
 When enabled, LangGraph runs:
