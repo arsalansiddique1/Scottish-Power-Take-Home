@@ -33,10 +33,10 @@ LLM_MODEL=gpt-oss:20b-cloud
 LLM_PROFILE=fast
 LLM_TIMEOUT_SECONDS=180
 
-LANGSMITH_TRACING=false
+LANGSMITH_TRACING=true
 LANGSMITH_API_KEY=
 LANGSMITH_PROJECT=automated-pr-reviewer
-LANGSMITH_ENDPOINT=https://api.smith.langchain.com
+LANGSMITH_ENDPOINT=https://eu.api.smith.langchain.com
 ```
 
 ### 4. Verify local setup
@@ -121,6 +121,7 @@ Set:
 LANGSMITH_TRACING=true
 LANGSMITH_API_KEY=lsv2_xxx
 LANGSMITH_PROJECT=automated-pr-reviewer
+LANGSMITH_ENDPOINT=https://eu.api.smith.langchain.com
 ```
 
 You should see traces for:
